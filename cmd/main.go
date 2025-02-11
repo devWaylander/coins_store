@@ -12,9 +12,9 @@ import (
 
 	"github.com/devWaylander/coins_store/config"
 	"github.com/devWaylander/coins_store/internal/handler"
+	"github.com/devWaylander/coins_store/internal/middleware"
 	"github.com/devWaylander/coins_store/internal/repo"
 	"github.com/devWaylander/coins_store/internal/service"
-	"github.com/devWaylander/coins_store/middleware"
 	errorgroup "github.com/devWaylander/coins_store/pkg/error_group"
 	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/jackc/pgx/v5/pgxpool"

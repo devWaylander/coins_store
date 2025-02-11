@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"time"
 
 	"github.com/devWaylander/coins_store/pkg/models"
@@ -22,7 +23,8 @@ func New(repo Repository, jwtKey string) *service {
 	}
 }
 
-func (s *service) GenerateJWT(username string) (string, error) {
+// Auth
+func (s *service) generateJWT(ctx context.Context, username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
 	claims := &models.Claims{
@@ -39,4 +41,12 @@ func (s *service) GenerateJWT(username string) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+// User
+func (s *service) ValidateUser(ctx context.Context, username, password string) error {
+	// гетаемюзера, если нет, то сразу регаем (создаём юзернейм, пароль, инвентарь)
+	// если есть, то валидируем его и отдаём токен
+
+	return nil
 }

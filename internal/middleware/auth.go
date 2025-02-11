@@ -8,10 +8,20 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var unsecuredHandles = map[string]struct{}{
+	"/api/auth": {},
+}
+
 func AuthMiddleware(next http.Handler, jwtKey string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if unsecuredHandles[r.URL.Path] == struct{}{} {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
+			// TODO: вынести ошибки
 			http.Error(w, "Authorization header missing", http.StatusUnauthorized)
 			return
 		}
@@ -22,12 +32,14 @@ func AuthMiddleware(next http.Handler, jwtKey string) http.Handler {
 		})
 
 		if err != nil || !token.Valid {
+			// TODO: вынести ошибки
 			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(*models.Claims)
 		if !ok {
+			// TODO: вынести ошибки
 			http.Error(w, "Couldn't parse claims", http.StatusUnauthorized)
 			return
 		}
