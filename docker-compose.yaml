@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  coins:
+    image: coins
+    build:
+      context: ./
+      dockerfile: docker/Dockerfile
+    env_file:
+    - .env
+    ports:
+      - "8080:8080"
+    networks:
+      - coinsNet
+    depends_on:
+      - postgresdb
+  postgresdb:
+    image: postgres:15.0
+    container_name: coins-postgres
+    hostname: postgres
+    env_file:
+    - .env
+    ports:
+      - "1234:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coinsNet
+    volumes:
+      - coins-pg-data:/var/lib/postgresql/data
+
+networks:
+  coinsNet:
+volumes:
+  coins-pg-data: {}
