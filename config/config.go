@@ -18,28 +18,26 @@ type Config struct {
 }
 
 type Common struct {
-	Port             string `env:"PORT,required"`
-	JWTSecret        string `env:"JWT_SECRET,required"`
-	JWTRefreshSecret string `env:"JWT_REFRESH_SECRET,required"`
+	Port      string `env:"API_PORT,required"`
+	JWTSecret string `env:"JWT_SECRET,required"`
 }
 
 type DB struct {
-	DBHost           string `env:"DB_HOST,required"`
-	DBDriver         string `env:"DB_DRIVER,required"`
-	DBUser           string `env:"DB_USER,required"`
-	DBPassword       string `env:"DB_PASSWORD,required"`
-	DBName           string `env:"DB_NAME,required"`
-	DBPort           string `env:"DB_PORT,required"`
-	DBMaxConnections int32  `env:"DB_MAX_CONNECTIONS,required"`
+	DBHost           string `env:"HOST,required"`
+	DBUser           string `env:"USER,required"`
+	DBPassword       string `env:"PASSWORD,required"`
+	DBName           string `env:"NAME,required"`
+	DBPort           string `env:"PORT,required"`
+	DBMaxConnections int32  `env:"MAX_CONNECTIONS,required"`
 	DBUrl            string `env:"DATABASE_URL,required"`
 	TestDBUrl        string `env:"TEST_DATABASE_URL,required"`
 }
 
 func Parse() (Config, error) {
 	// Read envs
-	err := godotenv.Load("../../.env.local")
+	err := godotenv.Load("../.env.local")
 	if err != nil {
-		err = godotenv.Load("../../.env")
+		err = godotenv.Load("../.env")
 		if err != nil {
 			return C, fmt.Errorf("failed to read environment variables: %w", err)
 		}

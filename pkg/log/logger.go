@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime/debug"
+	"runtime"
 	"strings"
 	"time"
 
@@ -53,7 +53,7 @@ func init() {
 
 	zerolog.TimeFieldFormat = readableTimeFormat
 
-	buildInfo, _ := debug.ReadBuildInfo()
+	// buildInfo, _ := debug.ReadBuildInfo()
 
 	infoSampler := &zerolog.BurstSampler{
 		Burst:  5,
@@ -80,7 +80,7 @@ func init() {
 		With().
 		Timestamp().
 		Caller().
-		Str("go_version", buildInfo.GoVersion).
+		// Str("go_version", buildInfo.GoVersion).
 		Logger().
 		Sample(zerolog.LevelSampler{
 			InfoSampler: infoSampler,
@@ -125,6 +125,12 @@ func consoleLogger() zerolog.ConsoleWriter {
 			return fmt.Sprintf("| %s |", i)
 		},
 		FormatCaller: func(i interface{}) string {
+			for skip := 5; skip < 15; skip++ { // Перебираем стек вызовов
+				_, file, line, ok := runtime.Caller(skip)
+				if ok && !strings.Contains(file, "/pkg/mod/") {
+					return fmt.Sprintf("%s:%d", file, line) // Возвращаем первый корректный путь
+				}
+			}
 			return filepath.Base(fmt.Sprintf("%s", i))
 		},
 	}

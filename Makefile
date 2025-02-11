@@ -19,7 +19,7 @@ dropTestDB: 										# Drop test database
 	dbmate -u $(DATABASE_URL) drop
 
 .PHONY: migrateTestDB
-migrateTestDB: dropTestDB 							# Create test database and run migrations
+migrateTestDB: dropTestDB 							# Create database and run migrations
 	dbmate -u $(DATABASE_URL) --no-dump-schema up
 
 .PHONY: stopSwaggerui
