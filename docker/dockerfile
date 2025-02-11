@@ -8,8 +8,7 @@ RUN chmod +x /usr/local/bin/dbmate
 WORKDIR /usr/src/app
 
 # Install dependencies
-# COPY go.mod go.sum ./
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 
 COPY . .
