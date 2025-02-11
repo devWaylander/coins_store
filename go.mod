@@ -4,6 +4,7 @@ go 1.22.8
 
 require (
 	github.com/caarlos0/env/v10 v10.0.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.33.0

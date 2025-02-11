@@ -14,6 +14,7 @@ import (
 	"github.com/devWaylander/coins_store/internal/handler"
 	"github.com/devWaylander/coins_store/internal/repo"
 	"github.com/devWaylander/coins_store/internal/service"
+	"github.com/devWaylander/coins_store/middleware"
 	errorgroup "github.com/devWaylander/coins_store/pkg/error_group"
 	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -64,16 +65,17 @@ func main() {
 	repo := repo.New(dbPool)
 
 	// Service
-	service := service.New(repo)
+	service := service.New(repo, cfg.Common.JWTSecret)
 
 	// Handler
 	mux := http.NewServeMux()
 	handler.New(ctx, mux, service)
-	// wrappedMux := middleware.NewRequestLogger(mux)
+	wrappedLoggerMux := middleware.LoggerMiddleware(mux)
+	wrappedAuthMux := middleware.AuthMiddleware(wrappedLoggerMux, cfg.Common.JWTSecret)
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Common.Port),
-		Handler: mux,
+		Handler: wrappedAuthMux,
 	}
 
 	// Graceful shutdown run
