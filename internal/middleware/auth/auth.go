@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"regexp"
 	"time"
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
@@ -77,6 +78,11 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 
 	// Не зарегистрирован
 	if user.ID == 0 {
+		validPass := m.validatePassword(password)
+		if !validPass {
+			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPasswordFormat)
+		}
+
 		passHash, err := utils.PasswordHash(password)
 		if err != nil {
 			return models.AuthDTO{}, err
@@ -127,4 +133,17 @@ func (m *middleware) generateJWT(userID int64) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func (m *middleware) validatePassword(password string) bool {
+	if len(password) < 8 {
+		return false
+	}
+
+	hasUpper := regexp.MustCompile(`[A-Z]`).MatchString(password)
+	hasLower := regexp.MustCompile(`[a-z]`).MatchString(password)
+	hasDigit := regexp.MustCompile(`\d`).MatchString(password)
+	hasSpecial := regexp.MustCompile(`[\W_]`).MatchString(password)
+
+	return hasUpper && hasLower && hasDigit && hasSpecial
 }

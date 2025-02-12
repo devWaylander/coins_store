@@ -40,6 +40,10 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 				http.Error(w, internalErrors.ErrWrongPassword, http.StatusUnauthorized)
 				return
 			}
+			if internalErrors.ErrWrongPasswordFormat == err.Error() {
+				http.Error(w, internalErrors.ErrWrongPasswordFormat, http.StatusUnauthorized)
+				return
+			}
 
 			log.Logger.Err(err)
 			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
