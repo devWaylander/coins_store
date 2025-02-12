@@ -26,7 +26,7 @@ func (r *repository) CreateUser(ctx context.Context, username, passwordHash stri
 	defer tx.Rollback(ctx)
 
 	var balanceID int64
-	query := `INSERT INTO shop.balance (amount) VALUES (1000) RETURNING id`
+	query := `INSERT INTO shop."balance" (amount) VALUES (1000) RETURNING id`
 	err = tx.QueryRow(ctx, query).Scan(&balanceID)
 	if err != nil {
 		// TODO: вынести ошибки
@@ -36,7 +36,7 @@ func (r *repository) CreateUser(ctx context.Context, username, passwordHash stri
 	var userID int64
 	query = `
 		INSERT INTO 
-			shop.user (balance_id, username, password_hash)
+			shop."user" (balance_id, username, password_hash)
 		VALUES 
 			($1, $2, $3)
 		RETURNING 
@@ -44,10 +44,19 @@ func (r *repository) CreateUser(ctx context.Context, username, passwordHash stri
 	`
 	err = tx.QueryRow(ctx, query, balanceID, username, passwordHash).Scan(&userID)
 	if err != nil {
+		// TODO: вынести ошибки
 		return 0, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	var inventoryID int64
+	query = `INSERT INTO shop."inventory" (user_id) VALUES ($1) RETURNING id`
+	err = tx.QueryRow(ctx, query, userID).Scan(&inventoryID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create inventory: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
+		// TODO: вынести ошибки
 		return 0, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 

@@ -16,23 +16,24 @@ type Inventory struct {
 type InventoryMerchDB struct {
 	InventoryID int64            `db:"inventory_id"`
 	MerchID     int64            `db:"merch_id"`
+	Name        string           `db:"name"`
 	Count       int64            `db:"count"`
 	DeletedAt   *strfmt.DateTime `db:"deleted_at"`
 	CreatedAt   strfmt.DateTime  `db:"created_at"`
 }
 
-func (imdb *InventoryMerchDB) ToModelInventory(inventoryItems []InventoryMerchDB, merchMap map[int64]*MerchDB) *Inventory {
-	inventory := Inventory{}
-
-	for _, item := range inventoryItems {
-		if merch, exists := merchMap[item.MerchID]; exists {
-			inventory.Items = append(inventory.Items, Merch{
-				Name:  merch.Name,
-				Price: merch.Price,
-				Count: item.Count,
-			})
-		}
+func (imdb *InventoryMerchDB) ToModelInventoryMerch() InventoryMerch {
+	return InventoryMerch{
+		InventoryID: imdb.InventoryID,
+		MerchID:     imdb.MerchID,
+		Name:        imdb.Name,
+		Count:       imdb.Count,
 	}
+}
 
-	return &inventory
+type InventoryMerch struct {
+	InventoryID int64  `json:"inventory_id"`
+	MerchID     int64  `json:"merch_id"`
+	Name        string `json:"name"`
+	Count       int64  `json:"count"`
 }

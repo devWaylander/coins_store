@@ -12,4 +12,6 @@ const (
 	ErrInvalidToken         = "ERR_INVALID_AUTH_TOKEN"
 	ErrInvalidClaims        = "ERR_CANNOT_PARSE_CLAIMS"
 	ErrLogin                = "ERR_FAILED_TO_LOGIN"
+	// ===================-    INFO    -===================
+	ErrGetInfo = "ERR_GET_INFO"
 )

@@ -74,6 +74,7 @@ CREATE TABLE shop."inventory_merch" (
     PRIMARY KEY (inventory_id, merch_id),
     inventory_id BIGINT NOT NULL REFERENCES shop."inventory" (id),
     merch_id BIGINT NOT NULL REFERENCES shop."merch" (id),
+    name VARCHAR(255) UNIQUE NOT NULL,
     count BIGINT NOT NULL DEFAULT 0,
     deleted_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

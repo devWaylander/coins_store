@@ -8,6 +8,8 @@ import (
 
 type Repository interface {
 	GetBalanceByUserID(ctx context.Context, userID int64) (int64, error)
+	GetInventoryMerchItems(ctx context.Context, userID int64) ([]models.InventoryMerch, error)
+	// GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error)
 }
 
 type service struct {
@@ -30,6 +32,15 @@ func (s *service) GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO
 	info.Coins = balance
 
 	// Inventory
+	inventory, err := s.getInventory(ctx, userID)
+	if err != nil {
+		return models.InfoDTO{}, err
+	}
+	itemsDTO := make([]models.MerchDTO, 0, len(inventory.Items))
+	for _, item := range inventory.Items {
+		itemsDTO = append(itemsDTO, item.ToModelMerchDTO())
+	}
+	info.Inventory = itemsDTO
 
 	// CoinsHistory
 
@@ -43,4 +54,22 @@ func (s *service) getBalance(ctx context.Context, userID int64) (int64, error) {
 	}
 
 	return balance, nil
+}
+
+func (s *service) getInventory(ctx context.Context, userID int64) (models.Inventory, error) {
+	inventoryMerchItems, err := s.repo.GetInventoryMerchItems(ctx, userID)
+	if err != nil {
+		return models.Inventory{}, err
+	}
+
+	inventory := models.Inventory{Items: make([]models.Merch, 0, len(inventoryMerchItems))}
+	for _, item := range inventoryMerchItems {
+		inventory.Items = append(inventory.Items, models.Merch{
+			ID:    item.MerchID,
+			Name:  item.Name,
+			Count: item.Count,
+		})
+	}
+
+	return inventory, nil
 }

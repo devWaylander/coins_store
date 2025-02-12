@@ -20,6 +20,10 @@ type Service interface {
 }
 
 func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware, service Service) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Bad Request: Method not allowed", http.StatusBadRequest)
+	})
+
 	// unsecured handles
 	mux.HandleFunc("POST /api/auth", func(w http.ResponseWriter, r *http.Request) {
 		body := models.AuthReq{}
@@ -54,17 +58,13 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 		sendResponse(w, authDTO)
 	})
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Bad Request: Method not allowed", http.StatusBadRequest)
-	})
-
 	// secured handles
 	mux.HandleFunc("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value(models.UserIDkey).(int64)
 		infoDTO, err := service.GetUserInfo(ctx, userID)
 		if err != nil {
 			log.Logger.Err(err)
-			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
+			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
 			return
 		}
 
