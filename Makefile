@@ -1,5 +1,6 @@
+include .env
 SERVICE = coins
-DATABASE_URL=$(DATABASE_URL)
+DATABASE_URL=$(DB_DATABASE_URL)
 SWAGGER_UI_CONTAINER_NAME = swagger-ui
 
 default: help

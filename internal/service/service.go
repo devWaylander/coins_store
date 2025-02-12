@@ -24,11 +24,11 @@ func New(repo Repository, jwtKey string) *service {
 }
 
 // Auth
-func (s *service) generateJWT(ctx context.Context, username string) (string, error) {
+func (s *service) generateJWT(userID int64) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
 	claims := &models.Claims{
-		Username: username,
+		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
@@ -44,7 +44,7 @@ func (s *service) generateJWT(ctx context.Context, username string) (string, err
 }
 
 // User
-func (s *service) ValidateUser(ctx context.Context, username, password string) error {
+func (s *service) LoginWithPass(ctx context.Context, username, password string) error {
 	// гетаемюзера, если нет, то сразу регаем (создаём юзернейм, пароль, инвентарь)
 	// если есть, то валидируем его и отдаём токен
 

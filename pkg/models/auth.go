@@ -5,10 +5,10 @@ import "github.com/golang-jwt/jwt/v5"
 // JWT
 type contextKey string
 
-const UsernameKey contextKey = "username"
+const UserIDkey contextKey = "userID"
 
 type Claims struct {
-	Username string `json:"username"`
+	UserID int64 `json:"uid"`
 	jwt.RegisteredClaims
 }
 

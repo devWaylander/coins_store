@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -21,8 +22,7 @@ func AuthMiddleware(next http.Handler, jwtKey string) http.Handler {
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			// TODO: вынести ошибки
-			http.Error(w, "Authorization header missing", http.StatusUnauthorized)
+			http.Error(w, errors.ErrAuthHeader, http.StatusUnauthorized)
 			return
 		}
 
@@ -32,18 +32,16 @@ func AuthMiddleware(next http.Handler, jwtKey string) http.Handler {
 		})
 
 		if err != nil || !token.Valid {
-			// TODO: вынести ошибки
-			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+			http.Error(w, errors.ErrInvalidToken, http.StatusUnauthorized)
 			return
 		}
 
 		claims, ok := token.Claims.(*models.Claims)
 		if !ok {
-			// TODO: вынести ошибки
-			http.Error(w, "Couldn't parse claims", http.StatusUnauthorized)
+			http.Error(w, errors.ErrInvalidClaims, http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), models.UsernameKey, claims.Username)
+		ctx := context.WithValue(r.Context(), models.UserIDkey, claims.UserID)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
