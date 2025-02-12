@@ -9,8 +9,8 @@ import (
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/models"
-	"github.com/devWaylander/coins_store/pkg/utils"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var unsecuredHandles = map[string]*struct{}{
@@ -83,7 +83,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPasswordFormat)
 		}
 
-		passHash, err := utils.PasswordHash(password)
+		passHash, err := m.passwordHash(password)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
@@ -104,7 +104,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 	if err != nil {
 		return models.AuthDTO{}, err
 	}
-	err = utils.PasswordCompare(password, passHash)
+	err = m.passwordCompare(password, passHash)
 	if err != nil {
 		return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPassword)
 	}
@@ -133,6 +133,22 @@ func (m *middleware) generateJWT(userID int64) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func (m *middleware) passwordHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
+}
+
+func (m *middleware) passwordCompare(password string, hash string) error {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *middleware) validatePassword(password string) bool {
