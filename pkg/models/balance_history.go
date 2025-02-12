@@ -30,16 +30,17 @@ type BalanceHistory struct {
 	Recipient         string `json:"recipient"`
 }
 
-func (bh *BalanceHistory) ToModelBalanceHistoryDTO() *BalanceHistoryDTO {
-	return &BalanceHistoryDTO{
-		TransactionAmount: bh.TransactionAmount,
-		Sender:            bh.Sender,
-		Recipient:         bh.Recipient,
-	}
+type ReceivedDTO struct {
+	FromUser string `json:"fromUser"`
+	Amount   int    `json:"amount"`
+}
+
+type SentDTO struct {
+	ToUser string `json:"toUser"`
+	Amount int    `json:"amount"`
 }
 
 type BalanceHistoryDTO struct {
-	TransactionAmount int64  `json:"transaction_amount"`
-	Sender            string `json:"sender"`
-	Recipient         string `json:"recipient"`
+	Received []ReceivedDTO `json:"received"`
+	Sent     []SentDTO     `json:"sent"`
 }

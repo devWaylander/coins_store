@@ -29,6 +29,7 @@ func (r *repository) CreateUser(ctx context.Context, username, passwordHash stri
 	query := `INSERT INTO shop.balance (amount) VALUES (1000) RETURNING id`
 	err = tx.QueryRow(ctx, query).Scan(&balanceID)
 	if err != nil {
+		// TODO: вынести ошибки
 		return 0, fmt.Errorf("failed to create balance: %w", err)
 	}
 
@@ -60,7 +61,6 @@ func (r *repository) GetUserByUsername(ctx context.Context, username string) (*m
 		SELECT
 			u.id,
 			u.balance_id,
-			u.inventory_id,
 			u.username,
 			u.password_hash,
 			u.created_at,
@@ -75,7 +75,6 @@ func (r *repository) GetUserByUsername(ctx context.Context, username string) (*m
 	err := row.Scan(
 		&user.ID,
 		&user.BalanceID,
-		&user.InventoryID,
 		&user.Username,
 		&user.PasswordHash,
 		&user.CreatedAt,

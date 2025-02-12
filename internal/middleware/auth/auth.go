@@ -50,7 +50,7 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 
 		tokenString := authHeader[len("Bearer "):]
 		token, err := jwt.ParseWithClaims(tokenString, &models.Claims{}, func(token *jwt.Token) (any, error) {
-			return m.jwtKey, nil
+			return []byte(m.jwtKey), nil
 		})
 
 		if err != nil || !token.Valid {

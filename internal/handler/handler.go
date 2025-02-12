@@ -16,6 +16,7 @@ type AuthMiddleware interface {
 }
 
 type Service interface {
+	GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO, error)
 }
 
 func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware, service Service) {
@@ -50,20 +51,7 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 			return
 		}
 
-		data, err := json.Marshal(authDTO)
-		if err != nil {
-			log.Logger.Err(err)
-			http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(data); err != nil {
-			log.Logger.Err(err)
-			http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
-			return
-		}
+		sendResponse(w, authDTO)
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -71,4 +59,32 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	})
 
 	// secured handles
+	mux.HandleFunc("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Context().Value(models.UserIDkey).(int64)
+		infoDTO, err := service.GetUserInfo(ctx, userID)
+		if err != nil {
+			log.Logger.Err(err)
+			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
+			return
+		}
+
+		sendResponse(w, infoDTO)
+	})
+}
+
+func sendResponse(w http.ResponseWriter, data any) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Logger.Err(err)
+		http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(jsonData); err != nil {
+		log.Logger.Err(err)
+		http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
+		return
+	}
 }

@@ -22,6 +22,19 @@ CREATE TABLE shop."balance_history" (
 
 CREATE INDEX "balance_history@balance_id_idx" ON shop."balance_history" (balance_id);
 
+-- user
+CREATE TABLE shop."user" (
+    id BIGSERIAL PRIMARY KEY,
+    balance_id BIGINT NOT NULL REFERENCES shop."balance" (id),
+    username VARCHAR(64) NOT NULL,
+    password_hash CHAR(64) DEFAULT NULL,
+    deleted_at TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX "user@username_idx" ON shop."user" (username);
+CREATE INDEX "user@balance_id_idx" ON shop."user" (balance_id);
+
 -- merch
 CREATE TABLE shop."merch" (
     id BIGSERIAL PRIMARY KEY,
@@ -49,28 +62,25 @@ INSERT INTO shop."merch" (name, price) VALUES
 -- inventory
 CREATE TABLE shop."inventory" (
     id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT UNIQUE NOT NULL REFERENCES shop."user" (id),
+    deleted_at TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX "inventory@user_id_idx" ON shop."inventory" (user_id);
+
+-- inventory_merch
+CREATE TABLE shop."inventory_merch" (
+    PRIMARY KEY (inventory_id, merch_id),
+    inventory_id BIGINT NOT NULL REFERENCES shop."inventory" (id),
     merch_id BIGINT NOT NULL REFERENCES shop."merch" (id),
     count BIGINT NOT NULL DEFAULT 0,
     deleted_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX "inventory@merch_id_idx" ON shop."inventory" (merch_id);
-
--- user
-CREATE TABLE shop."user" (
-    id BIGSERIAL PRIMARY KEY,
-    balance_id BIGINT NOT NULL REFERENCES shop."balance" (id),
-    inventory_id BIGINT DEFAULT NULL REFERENCES shop."inventory" (id),
-    username VARCHAR(64) NOT NULL,
-    password_hash CHAR(64) DEFAULT NULL,
-    deleted_at TIMESTAMPTZ DEFAULT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX "user@username_idx" ON shop."user" (username);
-CREATE INDEX "user@balance_id_idx" ON shop."user" (balance_id);
-CREATE INDEX "user@inventory_id_idx" ON shop."user" (inventory_id);
+CREATE INDEX "inventory_merch@inventory_id_idx" ON shop."inventory_merch" (inventory_id);
+CREATE INDEX "inventory_merch@merch_id_idx" ON shop."inventory_merch" (merch_id);
 
 -- migrate:down
 DROP SCHEMA IF EXISTS shop CASCADE;

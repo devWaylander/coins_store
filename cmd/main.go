@@ -70,7 +70,7 @@ func main() {
 	authMiddleware := auth.NewMiddleware(authMiddlewareRepo, cfg.Common.JWTSecret)
 
 	// Service
-	service := service.New(usecaseRepo, cfg.Common.JWTSecret)
+	service := service.New(usecaseRepo)
 
 	// Handler
 	mux := http.NewServeMux()
