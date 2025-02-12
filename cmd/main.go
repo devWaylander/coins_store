@@ -12,7 +12,8 @@ import (
 
 	"github.com/devWaylander/coins_store/config"
 	"github.com/devWaylander/coins_store/internal/handler"
-	"github.com/devWaylander/coins_store/internal/middleware"
+	auth "github.com/devWaylander/coins_store/internal/middleware/auth"
+	logger "github.com/devWaylander/coins_store/internal/middleware/logger"
 	"github.com/devWaylander/coins_store/internal/repo"
 	"github.com/devWaylander/coins_store/internal/service"
 	errorgroup "github.com/devWaylander/coins_store/pkg/error_group"
@@ -61,21 +62,25 @@ func main() {
 		log.Logger.Fatal().Msgf("Error running dbmate: %v", err)
 	}
 
-	// Repository
-	repo := repo.New(dbPool)
+	// Repositories
+	usecaseRepo := repo.New(dbPool)
+	authMiddlewareRepo := auth.NewAuthRepo(dbPool)
+
+	// Auth Middleware
+	authMiddleware := auth.NewMiddleware(authMiddlewareRepo, cfg.Common.JWTSecret)
 
 	// Service
-	service := service.New(repo, cfg.Common.JWTSecret)
+	service := service.New(usecaseRepo, cfg.Common.JWTSecret)
 
 	// Handler
 	mux := http.NewServeMux()
-	handler.New(ctx, mux, service)
-	wrappedLoggerMux := middleware.LoggerMiddleware(mux)
-	wrappedAuthMux := middleware.AuthMiddleware(wrappedLoggerMux, cfg.Common.JWTSecret)
+	handler.New(ctx, mux, authMiddleware, service)
+	wrappedAuthMux := authMiddleware.Middleware(mux)
+	wrappedLoggerMux := logger.Middleware(wrappedAuthMux)
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Common.Port),
-		Handler: wrappedAuthMux,
+		Handler: wrappedLoggerMux,
 	}
 
 	// Graceful shutdown run

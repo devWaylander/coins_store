@@ -48,7 +48,7 @@ CREATE INDEX "inventory@merch_id_idx" ON shop."inventory" (merch_id);
 CREATE TABLE shop."user" (
     id BIGSERIAL PRIMARY KEY,
     balance_id BIGINT NOT NULL REFERENCES shop."balance" (id),
-    inventory_id BIGINT NOT NULL REFERENCES shop."inventory" (id),
+    inventory_id BIGINT DEFAULT NULL REFERENCES shop."inventory" (id),
     username VARCHAR(64) NOT NULL,
     password_hash CHAR(64) DEFAULT NULL,
     deleted_at TIMESTAMPTZ DEFAULT NULL,
