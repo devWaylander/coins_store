@@ -12,10 +12,8 @@ type BalanceHistoryDB struct {
 	CreatedAt         strfmt.DateTime  `db:"created_at"`
 }
 
-func (bhdb *BalanceHistoryDB) ToModelBalanceHistory() *BalanceHistory {
-	return &BalanceHistory{
-		ID:                bhdb.ID,
-		BalanceID:         bhdb.BalanceID,
+func (bhdb *BalanceHistoryDB) ToModelBalanceHistory() BalanceHistory {
+	return BalanceHistory{
 		TransactionAmount: bhdb.TransactionAmount,
 		Sender:            bhdb.Sender,
 		Recipient:         bhdb.Recipient,
@@ -23,8 +21,6 @@ func (bhdb *BalanceHistoryDB) ToModelBalanceHistory() *BalanceHistory {
 }
 
 type BalanceHistory struct {
-	ID                int64  `json:"id"`
-	BalanceID         int64  `json:"balance_id"`
 	TransactionAmount int64  `json:"transaction_amount"`
 	Sender            string `json:"sender"`
 	Recipient         string `json:"recipient"`
@@ -32,12 +28,12 @@ type BalanceHistory struct {
 
 type ReceivedDTO struct {
 	FromUser string `json:"fromUser"`
-	Amount   int    `json:"amount"`
+	Amount   int64  `json:"amount"`
 }
 
 type SentDTO struct {
 	ToUser string `json:"toUser"`
-	Amount int    `json:"amount"`
+	Amount int64  `json:"amount"`
 }
 
 type BalanceHistoryDTO struct {

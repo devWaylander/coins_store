@@ -47,6 +47,66 @@ func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (int6
 	return int64(amount), nil
 }
 
+// Balance History
+func (r *repository) GetBalanceHistoryByUserID(ctx context.Context, userID int64) ([]models.BalanceHistory, error) {
+	var balanceHistoryDB []models.BalanceHistoryDB
+
+	query := `
+		SELECT
+			bh.id,
+			bh.balance_id,
+			bh.transaction_amount,
+			bh.sender,
+			bh.recipient,
+			bh.deleted_at,
+			bh.created_at
+		FROM
+			shop."balance_history" bh
+		INNER JOIN
+			shop."user" u
+		ON
+			u.balance_id = bh.balance_id
+		WHERE
+			u.id = $1
+	`
+
+	rows, err := r.db.Query(ctx, query, userID)
+	if err != nil {
+		// TODO: вынести ошибки
+		return nil, fmt.Errorf("failed to query balance history data: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		bh := models.BalanceHistoryDB{}
+		if err := rows.Scan(
+			&bh.ID,
+			&bh.BalanceID,
+			&bh.TransactionAmount,
+			&bh.Sender,
+			&bh.Recipient,
+			&bh.DeletedAt,
+			&bh.CreatedAt,
+		); err != nil {
+			// TODO: вынести ошибки
+			return nil, fmt.Errorf("failed to scan balance history data: %w", err)
+		}
+		balanceHistoryDB = append(balanceHistoryDB, bh)
+	}
+
+	if err := rows.Err(); err != nil {
+		// TODO: вынести ошибки
+		return nil, fmt.Errorf("failed to read rows: %w", err)
+	}
+
+	balanceHistory := make([]models.BalanceHistory, 0, len(balanceHistoryDB))
+	for _, e := range balanceHistoryDB {
+		balanceHistory = append(balanceHistory, e.ToModelBalanceHistory())
+	}
+
+	return balanceHistory, nil
+}
+
 // Inventory
 func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) ([]models.InventoryMerch, error) {
 	var inventoryMerchDB []models.InventoryMerchDB

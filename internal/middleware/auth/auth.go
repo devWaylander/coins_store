@@ -63,7 +63,8 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 			http.Error(w, internalErrors.ErrInvalidClaims, http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), models.UserIDkey, claims.UserID)
+		ctx := context.WithValue(r.Context(), models.UserIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, models.UsernameKey, claims.Username)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -92,7 +93,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 			return models.AuthDTO{}, err
 		}
 
-		token, err := m.generateJWT(userID)
+		token, err := m.generateJWT(userID, username)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
@@ -108,7 +109,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 	if err != nil {
 		return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPassword)
 	}
-	token, err := m.generateJWT(user.ID)
+	token, err := m.generateJWT(user.ID, username)
 	if err != nil {
 		return models.AuthDTO{}, err
 	}
@@ -116,11 +117,12 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 	return models.AuthDTO{Token: token}, err
 }
 
-func (m *middleware) generateJWT(userID int64) (string, error) {
+func (m *middleware) generateJWT(userID int64, username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 
 	claims := &models.Claims{
-		UserID: userID,
+		UserID:   userID,
+		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},

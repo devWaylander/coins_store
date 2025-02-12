@@ -8,6 +8,7 @@ import (
 
 type Repository interface {
 	GetBalanceByUserID(ctx context.Context, userID int64) (int64, error)
+	GetBalanceHistoryByUserID(ctx context.Context, userID int64) ([]models.BalanceHistory, error)
 	GetInventoryMerchItems(ctx context.Context, userID int64) ([]models.InventoryMerch, error)
 	// GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error)
 }
@@ -22,7 +23,7 @@ func New(repo Repository) *service {
 	}
 }
 
-func (s *service) GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO, error) {
+func (s *service) GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error) {
 	info := models.InfoDTO{}
 	// Balance
 	balance, err := s.getBalance(ctx, userID)
@@ -30,6 +31,13 @@ func (s *service) GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO
 		return models.InfoDTO{}, err
 	}
 	info.Coins = balance
+
+	// CoinsHistory
+	balanceHistory, err := s.getBalanceHistory(ctx, userID, username)
+	if err != nil {
+		return models.InfoDTO{}, err
+	}
+	info.CoinsHistory = balanceHistory
 
 	// Inventory
 	inventory, err := s.getInventory(ctx, userID)
@@ -42,8 +50,6 @@ func (s *service) GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO
 	}
 	info.Inventory = itemsDTO
 
-	// CoinsHistory
-
 	return info, nil
 }
 
@@ -54,6 +60,32 @@ func (s *service) getBalance(ctx context.Context, userID int64) (int64, error) {
 	}
 
 	return balance, nil
+}
+
+func (s *service) getBalanceHistory(ctx context.Context, userID int64, username string) (models.BalanceHistoryDTO, error) {
+	balanceHistory, err := s.repo.GetBalanceHistoryByUserID(ctx, userID)
+	if err != nil {
+		return models.BalanceHistoryDTO{}, err
+	}
+
+	var received = []models.ReceivedDTO{}
+	var sent = []models.SentDTO{}
+	for _, item := range balanceHistory {
+		if item.Recipient == username {
+			received = append(received, models.ReceivedDTO{
+				FromUser: item.Sender,
+				Amount:   item.TransactionAmount,
+			})
+			continue
+		}
+
+		sent = append(sent, models.SentDTO{
+			ToUser: item.Recipient,
+			Amount: item.TransactionAmount,
+		})
+	}
+
+	return models.BalanceHistoryDTO{Received: received, Sent: sent}, nil
 }
 
 func (s *service) getInventory(ctx context.Context, userID int64) (models.Inventory, error) {

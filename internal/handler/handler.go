@@ -16,7 +16,7 @@ type AuthMiddleware interface {
 }
 
 type Service interface {
-	GetUserInfo(ctx context.Context, userID int64) (models.InfoDTO, error)
+	GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error)
 }
 
 func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware, service Service) {
@@ -60,8 +60,9 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 
 	// secured handles
 	mux.HandleFunc("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(models.UserIDkey).(int64)
-		infoDTO, err := service.GetUserInfo(ctx, userID)
+		userID := r.Context().Value(models.UserIDKey).(int64)
+		username := r.Context().Value(models.UsernameKey).(string)
+		infoDTO, err := service.GetUserInfo(ctx, userID, username)
 		if err != nil {
 			log.Logger.Err(err)
 			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
