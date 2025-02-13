@@ -13,6 +13,7 @@ import (
 	"github.com/devWaylander/coins_store/config"
 	"github.com/devWaylander/coins_store/internal/handler"
 	auth "github.com/devWaylander/coins_store/internal/middleware/auth"
+	"github.com/devWaylander/coins_store/internal/middleware/cors"
 	logger "github.com/devWaylander/coins_store/internal/middleware/logger"
 	"github.com/devWaylander/coins_store/internal/repo"
 	"github.com/devWaylander/coins_store/internal/service"
@@ -76,7 +77,8 @@ func main() {
 	mux := http.NewServeMux()
 	handler.New(ctx, mux, authMiddleware, service)
 	wrappedAuthMux := authMiddleware.Middleware(mux)
-	wrappedLoggerMux := logger.Middleware(wrappedAuthMux)
+	wrappedCorsMux := cors.Middleware(wrappedAuthMux)
+	wrappedLoggerMux := logger.Middleware(wrappedCorsMux)
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Common.Port),
