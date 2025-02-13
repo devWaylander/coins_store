@@ -2,14 +2,24 @@ package service
 
 import (
 	"context"
+	"errors"
 
+	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/models"
 )
 
 type Repository interface {
-	GetBalanceByUserID(ctx context.Context, userID int64) (int64, error)
+	// Balance
+	GetBalanceByUserID(ctx context.Context, userID int64) (models.Balance, error)
+	GetBalanceAmountByUserID(ctx context.Context, userID int64) (int64, error)
+	// Balance history
 	GetBalanceHistoryByUserID(ctx context.Context, userID int64) ([]models.BalanceHistory, error)
+	// Inventory
 	GetInventoryMerchItems(ctx context.Context, userID int64) ([]models.InventoryMerch, error)
+	GetInventoryIDByUserID(ctx context.Context, userID int64) (int64, error)
+	// Merch
+	GetMerchByName(ctx context.Context, name string) (models.Merch, error)
+	BuyItemTX(ctx context.Context, userID, balanceID, inventoryID, merchID, price int64, username, item string) error
 	// GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error)
 }
 
@@ -25,12 +35,13 @@ func New(repo Repository) *service {
 
 func (s *service) GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error) {
 	info := models.InfoDTO{}
+
 	// Balance
-	balance, err := s.getBalance(ctx, userID)
+	amount, err := s.getBalanceAmount(ctx, userID)
 	if err != nil {
 		return models.InfoDTO{}, err
 	}
-	info.Coins = balance
+	info.Coins = amount
 
 	// CoinsHistory
 	balanceHistory, err := s.getBalanceHistory(ctx, userID, username)
@@ -53,13 +64,13 @@ func (s *service) GetUserInfo(ctx context.Context, userID int64, username string
 	return info, nil
 }
 
-func (s *service) getBalance(ctx context.Context, userID int64) (int64, error) {
-	balance, err := s.repo.GetBalanceByUserID(ctx, userID)
+func (s *service) getBalanceAmount(ctx context.Context, userID int64) (int64, error) {
+	amount, err := s.repo.GetBalanceAmountByUserID(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
 
-	return balance, nil
+	return amount, nil
 }
 
 func (s *service) getBalanceHistory(ctx context.Context, userID int64, username string) (models.BalanceHistoryDTO, error) {
@@ -104,4 +115,34 @@ func (s *service) getInventory(ctx context.Context, userID int64) (models.Invent
 	}
 
 	return inventory, nil
+}
+
+func (s *service) BuyItem(ctx context.Context, userID int64, username, item string) error {
+	merch, err := s.repo.GetMerchByName(ctx, item)
+	if err != nil {
+		return err
+	}
+	if merch.ID == 0 {
+		return errors.New(internalErrors.ErrItemDoesntExist)
+	}
+
+	balance, err := s.repo.GetBalanceByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if balance.Amount-merch.Price < 0 {
+		return errors.New(internalErrors.ErrNotEnoughCoins)
+	}
+
+	inventoryID, err := s.repo.GetInventoryIDByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	err = s.repo.BuyItemTX(ctx, userID, balance.ID, inventoryID, merch.ID, merch.Price, username, merch.Name)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -12,6 +12,7 @@ type MerchDB struct {
 
 func (mdb *MerchDB) ToModelMerch() Merch {
 	return Merch{
+		ID:    mdb.ID,
 		Name:  mdb.Name,
 		Price: mdb.Price,
 	}

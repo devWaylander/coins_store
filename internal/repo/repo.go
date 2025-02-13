@@ -19,7 +19,43 @@ func New(db *pgxpool.Pool) *repository {
 }
 
 // Balance
-func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (int64, error) {
+func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (models.Balance, error) {
+	balanceDB := models.BalanceDB{}
+
+	query := `
+		SELECT
+			b.id,
+			b.amount,
+			b.deleted_at,
+			b.created_at
+		FROM
+			shop."user" u
+		INNER JOIN
+			shop."balance" b
+		ON
+			u.balance_id = b.id
+		WHERE
+			u.id = $1 AND u.deleted_at IS NULL AND b.deleted_at IS NULL
+	`
+
+	row := r.db.QueryRow(ctx, query, userID)
+	err := row.Scan(
+		&balanceDB.ID,
+		&balanceDB.Amount,
+		&balanceDB.CreatedAt,
+		&balanceDB.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Balance{}, nil
+		}
+		return models.Balance{}, err
+	}
+
+	return balanceDB.ToModelBalance(), nil
+}
+
+func (r *repository) GetBalanceAmountByUserID(ctx context.Context, userID int64) (int64, error) {
 	amount := 0
 
 	query := `
@@ -72,8 +108,7 @@ func (r *repository) GetBalanceHistoryByUserID(ctx context.Context, userID int64
 
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
-		// TODO: вынести ошибки
-		return nil, fmt.Errorf("failed to query balance history data: %w", err)
+		return nil, fmt.Errorf("failed to query GetBalanceHistoryByUserID: %w", err)
 	}
 	defer rows.Close()
 
@@ -88,15 +123,13 @@ func (r *repository) GetBalanceHistoryByUserID(ctx context.Context, userID int64
 			&bh.DeletedAt,
 			&bh.CreatedAt,
 		); err != nil {
-			// TODO: вынести ошибки
-			return nil, fmt.Errorf("failed to scan balance history data: %w", err)
+			return nil, fmt.Errorf("failed to scan GetBalanceHistoryByUserID: %w", err)
 		}
 		balanceHistoryDB = append(balanceHistoryDB, bh)
 	}
 
 	if err := rows.Err(); err != nil {
-		// TODO: вынести ошибки
-		return nil, fmt.Errorf("failed to read rows: %w", err)
+		return nil, fmt.Errorf("failed to read rows GetBalanceHistoryByUserID: %w", err)
 	}
 
 	balanceHistory := make([]models.BalanceHistory, 0, len(balanceHistoryDB))
@@ -131,8 +164,7 @@ func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) (
 
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
-		// TODO: вынести ошибки
-		return nil, fmt.Errorf("failed to query inventory merch data: %w", err)
+		return nil, fmt.Errorf("failed to query GetInventoryMerchItems: %w", err)
 	}
 	defer rows.Close()
 
@@ -146,15 +178,13 @@ func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) (
 			&im.DeletedAt,
 			&im.CreatedAt,
 		); err != nil {
-			// TODO: вынести ошибки
-			return nil, fmt.Errorf("failed to scan inventory merch data: %w", err)
+			return nil, fmt.Errorf("failed to scan GetInventoryMerchItems: %w", err)
 		}
 		inventoryMerchDB = append(inventoryMerchDB, im)
 	}
 
 	if err := rows.Err(); err != nil {
-		// TODO: вынести ошибки
-		return nil, fmt.Errorf("failed to read rows: %w", err)
+		return nil, fmt.Errorf("failed to read rows GetInventoryMerchItems: %w", err)
 	}
 
 	inventoryMerch := make([]models.InventoryMerch, 0, len(inventoryMerchDB))
@@ -163,6 +193,129 @@ func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) (
 	}
 
 	return inventoryMerch, nil
+}
+
+func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventoryID, merchID, price int64, username, item string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	// списание баланса
+	query := `
+		UPDATE
+			shop."balance"
+		SET
+			amount = amount - $1
+		WHERE
+			id = $2
+	`
+	cmdTag, err := tx.Exec(ctx, query, price, balanceID)
+	if err != nil {
+		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no balance rows updated BuyItemTX")
+	}
+
+	// создание записи в истории транзакций
+	query = `
+		INSERT INTO
+			shop."balance_history" (balance_id, transaction_amount, sender, recipient)
+		VALUES
+			($1, $2, $3, 'AvitoShop')
+	`
+	cmdTag, err = tx.Exec(ctx, query, balanceID, price, username)
+	if err != nil {
+		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no rows inserted balance history BuyItemTX")
+	}
+
+	// создание записи-связки для инвентаря с данным предметом
+	query = `
+		INSERT INTO
+			shop."inventory_merch" (inventory_id, merch_id, name, count)
+		VALUES
+			($1, $2, $3, 1)
+		ON CONFLICT (inventory_id, merch_id)
+		DO UPDATE SET count = shop."inventory_merch".count + 1
+	`
+	cmdTag, err = tx.Exec(ctx, query, inventoryID, merchID, item)
+	if err != nil {
+		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no rows inserted inventory merch BuyItemTX")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction BuyItemTX: %w", err)
+	}
+
+	return nil
+}
+
+func (r *repository) GetInventoryIDByUserID(ctx context.Context, userID int64) (int64, error) {
+	var inventoryID int64
+
+	query := `
+		SELECT
+			i.id
+		FROM
+			shop."inventory" i
+		WHERE
+			i.user_id = $1
+	`
+
+	row := r.db.QueryRow(ctx, query, userID)
+	err := row.Scan(&inventoryID)
+	if err != nil {
+		return 0, err
+	}
+
+	return inventoryID, nil
+}
+
+// Merch
+func (r *repository) GetMerchByName(ctx context.Context, name string) (models.Merch, error) {
+	merchDB := models.MerchDB{}
+
+	query := `
+		SELECT
+			m.id,
+			m.name,
+			m.price,
+			m.deleted_at,
+			m.created_at
+		FROM
+			shop."merch" m
+		WHERE
+			m.name = $1
+	`
+
+	row := r.db.QueryRow(ctx, query, name)
+	err := row.Scan(
+		&merchDB.ID,
+		&merchDB.Name,
+		&merchDB.Price,
+		&merchDB.CreatedAt,
+		&merchDB.DeletedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Merch{}, nil
+		}
+		return models.Merch{}, err
+	}
+
+	return merchDB.ToModelMerch(), nil
 }
 
 // func (r *repository) GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error) {
@@ -183,7 +336,6 @@ func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) (
 
 // 	rows, err := r.db.Query(ctx, query, merchesIDs)
 // 	if err != nil {
-// 		// TODO: вынести ошибки
 // 		return nil, fmt.Errorf("failed to query merch data: %w", err)
 // 	}
 // 	defer rows.Close()
@@ -197,14 +349,12 @@ func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) (
 // 			&m.DeletedAt,
 // 			&m.CreatedAt,
 // 		); err != nil {
-// 			// TODO: вынести ошибки
 // 			return nil, fmt.Errorf("failed to scan merch data: %w", err)
 // 		}
 // 		merchesDB = append(merchesDB, m)
 // 	}
 
 // 	if err := rows.Err(); err != nil {
-// 		// TODO: вынести ошибки
 // 		return nil, fmt.Errorf("failed to read rows: %w", err)
 // 	}
 

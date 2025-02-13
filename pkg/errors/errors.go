@@ -15,4 +15,9 @@ const (
 	ErrLogin                = "ERR_FAILED_TO_LOGIN"
 	// ===================-    INFO    -===================
 	ErrGetInfo = "ERR_GET_INFO"
+	// ===================-  BUY ITEM  -===================
+	ErrInvalidGetBuyItemReqParams = "ERR_INVALID_GET_BUY_REQ_PARAMS"
+	ErrGetBuyItem                 = "ERR_GET_BUY_ITEM"
+	ErrItemDoesntExist            = "ERR_ITEM_DOESNT_EXIST"
+	ErrNotEnoughCoins             = "ERR_NOT_ENOUGH_COINS"
 )

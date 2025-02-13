@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strings"
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/log"
@@ -17,6 +17,7 @@ type AuthMiddleware interface {
 
 type Service interface {
 	GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error)
+	BuyItem(ctx context.Context, userID int64, username, item string) error
 }
 
 func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware, service Service) {
@@ -25,33 +26,31 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	})
 
 	// unsecured handles
+	// Аутентификация и получение JWT-токена. При первой аутентификации пользователь создается автоматически.
 	mux.HandleFunc("POST /api/auth", func(w http.ResponseWriter, r *http.Request) {
 		body := models.AuthReq{}
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
-			log.Logger.Err(err)
+			log.Logger.Err(err).Msg(err.Error())
 			http.Error(w, internalErrors.ErrUnmarshalResponse, http.StatusInternalServerError)
 			return
 		}
 		if body.Password == "" || body.Username == "" {
-			log.Logger.Info().Msg(fmt.Sprintf("Empty request: %s", internalErrors.ErrInvalidAuthReqParams))
 			http.Error(w, internalErrors.ErrInvalidAuthReqParams, http.StatusBadRequest)
 			return
 		}
 
 		authDTO, err := authMiddleware.LoginWithPass(ctx, body.Username, body.Password)
 		if err != nil {
-			if internalErrors.ErrWrongPassword == err.Error() {
+			switch err.Error() {
+			case internalErrors.ErrWrongPassword:
 				http.Error(w, internalErrors.ErrWrongPassword, http.StatusUnauthorized)
-				return
-			}
-			if internalErrors.ErrWrongPasswordFormat == err.Error() {
+			case internalErrors.ErrWrongPasswordFormat:
 				http.Error(w, internalErrors.ErrWrongPasswordFormat, http.StatusUnauthorized)
-				return
+			default:
+				http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
+				log.Logger.Err(err).Msg(err.Error())
 			}
-
-			log.Logger.Err(err)
-			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
 			return
 		}
 
@@ -59,24 +58,56 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	})
 
 	// secured handles
+	// Получить информацию о монетах, инвентаре и истории транзакций.
 	mux.HandleFunc("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Context().Value(models.UserIDKey).(int64)
 		username := r.Context().Value(models.UsernameKey).(string)
 		infoDTO, err := service.GetUserInfo(ctx, userID, username)
 		if err != nil {
-			log.Logger.Err(err)
+			log.Logger.Err(err).Msg(err.Error())
 			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
 			return
 		}
 
 		sendResponse(w, infoDTO)
 	})
+	// Купить предмет за монеты.
+	mux.HandleFunc("GET /api/buy/", func(w http.ResponseWriter, r *http.Request) {
+		urlParts := strings.Split(r.URL.Path, "/")
+		if len(urlParts) < 4 {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		item := urlParts[3]
+		if item == "" {
+			http.Error(w, internalErrors.ErrInvalidGetBuyItemReqParams, http.StatusBadRequest)
+			return
+		}
+
+		userID := r.Context().Value(models.UserIDKey).(int64)
+		username := r.Context().Value(models.UsernameKey).(string)
+		err := service.BuyItem(ctx, userID, username, item)
+		if err != nil {
+			switch err.Error() {
+			case internalErrors.ErrItemDoesntExist:
+				http.Error(w, internalErrors.ErrItemDoesntExist, http.StatusBadRequest)
+			case internalErrors.ErrNotEnoughCoins:
+				http.Error(w, internalErrors.ErrNotEnoughCoins, http.StatusBadRequest)
+			default:
+				http.Error(w, internalErrors.ErrGetBuyItem, http.StatusInternalServerError)
+				log.Logger.Err(err).Msg(err.Error())
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
 }
 
 func sendResponse(w http.ResponseWriter, data any) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		log.Logger.Err(err)
+		log.Logger.Err(err).Msg(err.Error())
 		http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
 		return
 	}
@@ -84,7 +115,7 @@ func sendResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(jsonData); err != nil {
-		log.Logger.Err(err)
+		log.Logger.Err(err).Msg(err.Error())
 		http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
 		return
 	}

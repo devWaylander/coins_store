@@ -9,8 +9,8 @@ type BalanceDB struct {
 	CreatedAt strfmt.DateTime  `db:"created_at"`
 }
 
-func (bdb *BalanceDB) ToModelBalance() *Balance {
-	return &Balance{
+func (bdb *BalanceDB) ToModelBalance() Balance {
+	return Balance{
 		ID:     bdb.ID,
 		Amount: bdb.Amount,
 	}

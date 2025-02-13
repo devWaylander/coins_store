@@ -18,21 +18,26 @@ func NewAuthRepo(db *pgxpool.Pool) *repository {
 	return &repository{db: db}
 }
 
-func (r *repository) CreateUser(ctx context.Context, username, passwordHash string) (int64, error) {
+func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash string) (int64, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
 
+	// создание баланса
 	var balanceID int64
 	query := `INSERT INTO shop."balance" (amount) VALUES (1000) RETURNING id`
 	err = tx.QueryRow(ctx, query).Scan(&balanceID)
 	if err != nil {
-		// TODO: вынести ошибки
-		return 0, fmt.Errorf("failed to create balance: %w", err)
+		return 0, fmt.Errorf("failed to create balance CreateUserTX: %w", err)
 	}
 
+	// создание пользователя
 	var userID int64
 	query = `
 		INSERT INTO 
@@ -44,20 +49,19 @@ func (r *repository) CreateUser(ctx context.Context, username, passwordHash stri
 	`
 	err = tx.QueryRow(ctx, query, balanceID, username, passwordHash).Scan(&userID)
 	if err != nil {
-		// TODO: вынести ошибки
-		return 0, fmt.Errorf("failed to create user: %w", err)
+		return 0, fmt.Errorf("failed to create user CreateUserTX: %w", err)
 	}
 
+	// создание инвентаря пользователя
 	var inventoryID int64
 	query = `INSERT INTO shop."inventory" (user_id) VALUES ($1) RETURNING id`
 	err = tx.QueryRow(ctx, query, userID).Scan(&inventoryID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create inventory: %w", err)
+		return 0, fmt.Errorf("failed to create inventory CreateUserTX: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		// TODO: вынести ошибки
-		return 0, fmt.Errorf("failed to commit transaction: %w", err)
+		return 0, fmt.Errorf("failed to commit transaction CreateUserTX: %w", err)
 	}
 
 	return userID, nil

@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
+	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/devWaylander/coins_store/pkg/models"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -19,7 +20,7 @@ var unsecuredHandles = map[string]*struct{}{
 }
 
 type Repository interface {
-	CreateUser(ctx context.Context, username, passwordHash string) (int64, error)
+	CreateUserTX(ctx context.Context, username, passwordHash string) (int64, error)
 	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
 	GetUserPassHashByUsername(ctx context.Context, username string) (string, error)
 }
@@ -53,8 +54,12 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 		token, err := jwt.ParseWithClaims(tokenString, &models.Claims{}, func(token *jwt.Token) (any, error) {
 			return []byte(m.jwtKey), nil
 		})
-
-		if err != nil || !token.Valid {
+		if err != nil {
+			log.Logger.Err(err).Msg(err.Error())
+			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
+			return
+		}
+		if !token.Valid {
 			http.Error(w, internalErrors.ErrInvalidToken, http.StatusUnauthorized)
 			return
 		}
@@ -94,7 +99,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
-		userID, err := m.repo.CreateUser(ctx, username, passHash)
+		userID, err := m.repo.CreateUserTX(ctx, username, passHash)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
