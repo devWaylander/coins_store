@@ -9,6 +9,9 @@ import (
 )
 
 type Repository interface {
+	// User
+	IsUserExist(ctx context.Context, username string) (bool, error)
+	GetBalanceIDByUsername(ctx context.Context, username string) (int64, error)
 	// Balance
 	GetBalanceByUserID(ctx context.Context, userID int64) (models.Balance, error)
 	GetBalanceAmountByUserID(ctx context.Context, userID int64) (int64, error)
@@ -20,7 +23,8 @@ type Repository interface {
 	// Merch
 	GetMerchByName(ctx context.Context, name string) (models.Merch, error)
 	BuyItemTX(ctx context.Context, userID, balanceID, inventoryID, merchID, price int64, username, item string) error
-	// GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error)
+	// Send coins
+	SendCoinsTX(ctx context.Context, userID, senderBalanceID, recipientBalanceID, amount int64, sender, recipient string) error
 }
 
 type service struct {
@@ -33,6 +37,7 @@ func New(repo Repository) *service {
 	}
 }
 
+// UserInfo
 func (s *service) GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error) {
 	info := models.InfoDTO{}
 
@@ -117,6 +122,7 @@ func (s *service) getInventory(ctx context.Context, userID int64) (models.Invent
 	return inventory, nil
 }
 
+// BuyItem
 func (s *service) BuyItem(ctx context.Context, userID int64, username, item string) error {
 	merch, err := s.repo.GetMerchByName(ctx, item)
 	if err != nil {
@@ -140,6 +146,34 @@ func (s *service) BuyItem(ctx context.Context, userID int64, username, item stri
 	}
 
 	err = s.repo.BuyItemTX(ctx, userID, balance.ID, inventoryID, merch.ID, merch.Price, username, merch.Name)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Send coins
+func (s *service) SendCoins(ctx context.Context, userID, amount int64, sender, recipient string) error {
+	validRecipient, err := s.repo.IsUserExist(ctx, recipient)
+	if err != nil {
+		return err
+	}
+	if !validRecipient {
+		return errors.New(internalErrors.ErrInvalidRecipient)
+	}
+	senderBalance, err := s.repo.GetBalanceByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if senderBalance.Amount-amount < 0 {
+		return errors.New(internalErrors.ErrNotEnoughCoins)
+	}
+	recipientBalanceID, err := s.repo.GetBalanceIDByUsername(ctx, recipient)
+	if err != nil {
+		return err
+	}
+	err = s.repo.SendCoinsTX(ctx, userID, senderBalance.ID, recipientBalanceID, amount, sender, recipient)
 	if err != nil {
 		return err
 	}

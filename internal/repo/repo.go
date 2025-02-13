@@ -10,12 +10,62 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const shopUser = "AvitoShop"
+
 type repository struct {
 	db *pgxpool.Pool
 }
 
 func New(db *pgxpool.Pool) *repository {
 	return &repository{db: db}
+}
+
+// User
+func (r *repository) IsUserExist(ctx context.Context, username string) (bool, error) {
+	var userID int64
+
+	query := `
+		SELECT
+			u.id
+		FROM
+			shop."user" u
+		WHERE
+			u.username = $1
+	`
+	row := r.db.QueryRow(ctx, query, username)
+	err := row.Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("IsUserExist failed: %w", err)
+	}
+
+	return true, nil
+}
+
+func (r *repository) GetBalanceIDByUsername(ctx context.Context, username string) (int64, error) {
+	var balanceID int64
+
+	query := `
+		SELECT
+			u.balance_id
+		FROM
+			shop."user" u
+		WHERE
+			u.username = $1
+	`
+
+	row := r.db.QueryRow(ctx, query, username)
+	err := row.Scan(&balanceID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("GetBalanceIDByUsername failed: %w", err)
+	}
+
+	return balanceID, nil
 }
 
 // Balance
@@ -49,14 +99,14 @@ func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (mode
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Balance{}, nil
 		}
-		return models.Balance{}, err
+		return models.Balance{}, fmt.Errorf("GetBalanceByUserID failed: %w", err)
 	}
 
 	return balanceDB.ToModelBalance(), nil
 }
 
 func (r *repository) GetBalanceAmountByUserID(ctx context.Context, userID int64) (int64, error) {
-	amount := 0
+	var amount int64
 
 	query := `
 		SELECT
@@ -77,10 +127,10 @@ func (r *repository) GetBalanceAmountByUserID(ctx context.Context, userID int64)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, nil
 		}
-		return 0, err
+		return 0, fmt.Errorf("GetBalanceAmountByUserID failed: %w", err)
 	}
 
-	return int64(amount), nil
+	return amount, nil
 }
 
 // Balance History
@@ -140,7 +190,108 @@ func (r *repository) GetBalanceHistoryByUserID(ctx context.Context, userID int64
 	return balanceHistory, nil
 }
 
+func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, recipientBalanceID, amount int64, sender, recipient string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	// списание баланса отправителя
+	query := `
+		UPDATE
+			shop."balance"
+		SET
+			amount = amount - $1
+		WHERE
+			id = $2
+	`
+	cmdTag, err := tx.Exec(ctx, query, amount, senderBalanceID)
+	if err != nil {
+		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no sender balance rows updated SendCoinsTX")
+	}
+	// создание записи в истории транзакций отправителя
+	query = `
+		INSERT INTO
+			shop."balance_history" (balance_id, transaction_amount, sender, recipient)
+		VALUES
+			($1, $2, $3, $4)
+	`
+	cmdTag, err = tx.Exec(ctx, query, senderBalanceID, amount, sender, recipient)
+	if err != nil {
+		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no rows inserted sender balance history SendCoinsTX")
+	}
+
+	// пополнение баланса получателя
+	query = `
+		UPDATE
+			shop."balance"
+		SET
+			amount = amount + $1
+		WHERE
+			id = $2
+	`
+	cmdTag, err = tx.Exec(ctx, query, amount, recipientBalanceID)
+	if err != nil {
+		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no recipient balance rows updated SendCoinsTX")
+	}
+	// создание записи в истории транзакций получателя
+	query = `
+	INSERT INTO
+		shop."balance_history" (balance_id, transaction_amount, sender, recipient)
+	VALUES
+		($1, $2, $3, $4)
+	`
+	cmdTag, err = tx.Exec(ctx, query, recipientBalanceID, amount, sender, recipient)
+	if err != nil {
+		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return fmt.Errorf("no rows inserted recipient balance history SendCoinsTX")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction SendCoinsTX: %w", err)
+	}
+
+	return nil
+}
+
 // Inventory
+func (r *repository) GetInventoryIDByUserID(ctx context.Context, userID int64) (int64, error) {
+	var inventoryID int64
+
+	query := `
+		SELECT
+			i.id
+		FROM
+			shop."inventory" i
+		WHERE
+			i.user_id = $1
+	`
+
+	row := r.db.QueryRow(ctx, query, userID)
+	err := row.Scan(&inventoryID)
+	if err != nil {
+		return 0, fmt.Errorf("GetInventoryIDByUserID failed: %w", err)
+	}
+
+	return inventoryID, nil
+}
+
 func (r *repository) GetInventoryMerchItems(ctx context.Context, userID int64) ([]models.InventoryMerch, error) {
 	var inventoryMerchDB []models.InventoryMerchDB
 
@@ -228,9 +379,9 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 		INSERT INTO
 			shop."balance_history" (balance_id, transaction_amount, sender, recipient)
 		VALUES
-			($1, $2, $3, 'AvitoShop')
+			($1, $2, $3, $4)
 	`
-	cmdTag, err = tx.Exec(ctx, query, balanceID, price, username)
+	cmdTag, err = tx.Exec(ctx, query, balanceID, price, username, shopUser)
 	if err != nil {
 		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
 	}
@@ -262,27 +413,6 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	return nil
 }
 
-func (r *repository) GetInventoryIDByUserID(ctx context.Context, userID int64) (int64, error) {
-	var inventoryID int64
-
-	query := `
-		SELECT
-			i.id
-		FROM
-			shop."inventory" i
-		WHERE
-			i.user_id = $1
-	`
-
-	row := r.db.QueryRow(ctx, query, userID)
-	err := row.Scan(&inventoryID)
-	if err != nil {
-		return 0, err
-	}
-
-	return inventoryID, nil
-}
-
 // Merch
 func (r *repository) GetMerchByName(ctx context.Context, name string) (models.Merch, error) {
 	merchDB := models.MerchDB{}
@@ -312,56 +442,8 @@ func (r *repository) GetMerchByName(ctx context.Context, name string) (models.Me
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Merch{}, nil
 		}
-		return models.Merch{}, err
+		return models.Merch{}, fmt.Errorf("GetMerchByName failed: %w", err)
 	}
 
 	return merchDB.ToModelMerch(), nil
 }
-
-// func (r *repository) GetInventoryMerchesByIDs(ctx context.Context, merchesIDs []int64) ([]models.Merch, error) {
-// 	merchesDB := make([]models.MerchDB, 0, len(merchesIDs))
-
-// 	query := `
-// 		SELECT
-// 			m.id,
-// 			m.name,
-// 			m.price,
-// 			m.deleted_at,
-// 			m.created_at
-// 		FROM
-// 			shop."merch" m
-// 		WHERE
-// 			m.id = ANY($1)
-// 	`
-
-// 	rows, err := r.db.Query(ctx, query, merchesIDs)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to query merch data: %w", err)
-// 	}
-// 	defer rows.Close()
-
-// 	for rows.Next() {
-// 		m := models.MerchDB{}
-// 		if err := rows.Scan(
-// 			&m.ID,
-// 			&m.Name,
-// 			&m.Price,
-// 			&m.DeletedAt,
-// 			&m.CreatedAt,
-// 		); err != nil {
-// 			return nil, fmt.Errorf("failed to scan merch data: %w", err)
-// 		}
-// 		merchesDB = append(merchesDB, m)
-// 	}
-
-// 	if err := rows.Err(); err != nil {
-// 		return nil, fmt.Errorf("failed to read rows: %w", err)
-// 	}
-
-// 	merches := make([]models.Merch, 0, len(merchesDB))
-// 	for _, e := range merchesDB {
-// 		merches = append(merches, e.ToModelMerch())
-// 	}
-
-// 	return merches, nil
-// }

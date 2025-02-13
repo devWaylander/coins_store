@@ -18,6 +18,7 @@ type AuthMiddleware interface {
 type Service interface {
 	GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error)
 	BuyItem(ctx context.Context, userID int64, username, item string) error
+	SendCoins(ctx context.Context, userID, amount int64, sender, recipient string) error
 }
 
 func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware, service Service) {
@@ -28,19 +29,23 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	// unsecured handles
 	// Аутентификация и получение JWT-токена. При первой аутентификации пользователь создается автоматически.
 	mux.HandleFunc("POST /api/auth", func(w http.ResponseWriter, r *http.Request) {
-		body := models.AuthReq{}
-		err := json.NewDecoder(r.Body).Decode(&body)
+		var bodyAuth struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+
+		err := json.NewDecoder(r.Body).Decode(&bodyAuth)
 		if err != nil {
 			log.Logger.Err(err).Msg(err.Error())
 			http.Error(w, internalErrors.ErrUnmarshalResponse, http.StatusInternalServerError)
 			return
 		}
-		if body.Password == "" || body.Username == "" {
+		if bodyAuth.Password == "" || bodyAuth.Username == "" {
 			http.Error(w, internalErrors.ErrInvalidAuthReqParams, http.StatusBadRequest)
 			return
 		}
 
-		authDTO, err := authMiddleware.LoginWithPass(ctx, body.Username, body.Password)
+		authDTO, err := authMiddleware.LoginWithPass(ctx, bodyAuth.Username, bodyAuth.Password)
 		if err != nil {
 			switch err.Error() {
 			case internalErrors.ErrWrongPassword:
@@ -91,6 +96,46 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 			switch err.Error() {
 			case internalErrors.ErrItemDoesntExist:
 				http.Error(w, internalErrors.ErrItemDoesntExist, http.StatusBadRequest)
+			case internalErrors.ErrNotEnoughCoins:
+				http.Error(w, internalErrors.ErrNotEnoughCoins, http.StatusBadRequest)
+			default:
+				http.Error(w, internalErrors.ErrGetBuyItem, http.StatusInternalServerError)
+				log.Logger.Err(err).Msg(err.Error())
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+	// Отправить монеты другому пользователю
+	mux.HandleFunc("POST /api/sendCoin", func(w http.ResponseWriter, r *http.Request) {
+		var bodySendCoin struct {
+			Recipient string `json:"toUser"`
+			Amount    int64  `json:"amount"`
+		}
+
+		err := json.NewDecoder(r.Body).Decode(&bodySendCoin)
+		if err != nil {
+			log.Logger.Err(err).Msg(err.Error())
+			http.Error(w, internalErrors.ErrUnmarshalResponse, http.StatusInternalServerError)
+			return
+		}
+		if bodySendCoin.Amount < 1 {
+			http.Error(w, internalErrors.ErrInvalidSendCoinsReqParams, http.StatusBadRequest)
+			return
+		}
+
+		username := r.Context().Value(models.UsernameKey).(string)
+		if bodySendCoin.Recipient == username {
+			http.Error(w, internalErrors.ErrInvalidRecipientYourself, http.StatusBadRequest)
+			return
+		}
+		userID := r.Context().Value(models.UserIDKey).(int64)
+		err = service.SendCoins(ctx, userID, bodySendCoin.Amount, username, bodySendCoin.Recipient)
+		if err != nil {
+			switch err.Error() {
+			case internalErrors.ErrInvalidRecipient:
+				http.Error(w, internalErrors.ErrInvalidRecipient, http.StatusBadRequest)
 			case internalErrors.ErrNotEnoughCoins:
 				http.Error(w, internalErrors.ErrNotEnoughCoins, http.StatusBadRequest)
 			default:

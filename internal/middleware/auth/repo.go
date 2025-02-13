@@ -97,7 +97,7 @@ func (r *repository) GetUserByUsername(ctx context.Context, username string) (*m
 		if errors.Is(err, pgx.ErrNoRows) {
 			return &models.User{}, nil
 		}
-		return &models.User{}, err
+		return &models.User{}, fmt.Errorf("GetUserByUsername failed: %w", err)
 	}
 
 	return user.ToModelUser(), nil
@@ -121,7 +121,7 @@ func (r *repository) GetUserPassHashByUsername(ctx context.Context, username str
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil
 		}
-		return "", err
+		return "", fmt.Errorf("GetUserPassHashByUsername failed: %w", err)
 	}
 
 	return passHash, nil
