@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+	"unicode"
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/models"
@@ -82,6 +83,11 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 		validPass := m.validatePassword(password)
 		if !validPass {
 			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPasswordFormat)
+		}
+
+		validUsername := m.validateUsername(username)
+		if !validUsername {
+			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongUsernameFormat)
 		}
 
 		passHash, err := m.passwordHash(password)
@@ -164,4 +170,18 @@ func (m *middleware) validatePassword(password string) bool {
 	hasSpecial := regexp.MustCompile(`[\W_]`).MatchString(password)
 
 	return hasUpper && hasLower && hasDigit && hasSpecial
+}
+
+func (m *middleware) validateUsername(username string) bool {
+	if len(username) > 64 {
+		return false
+	}
+
+	for _, r := range username {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			return false
+		}
+	}
+
+	return true
 }
