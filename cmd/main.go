@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -54,14 +53,6 @@ func main() {
 		log.Logger.Fatal().Msgf("Unable to create connection pool: %v\n", err)
 	}
 	defer dbPool.Close()
-
-	// Migrations
-	cmd := exec.Command("dbmate", "-u", cfg.DB.DBUrl, "--migrations-dir", "../db/migrations", "--no-dump-schema", "up")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		log.Logger.Fatal().Msgf("Error running dbmate: %v", err)
-	}
 
 	// Repositories
 	usecaseRepo := repo.New(dbPool)
