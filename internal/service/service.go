@@ -38,25 +38,25 @@ func New(repo Repository) *service {
 }
 
 // UserInfo
-func (s *service) GetUserInfo(ctx context.Context, userID int64, username string) (models.InfoDTO, error) {
+func (s *service) GetUserInfo(ctx context.Context, qp models.InfoQuery) (models.InfoDTO, error) {
 	info := models.InfoDTO{}
 
 	// Balance
-	amount, err := s.getBalanceAmount(ctx, userID)
+	amount, err := s.getBalanceAmount(ctx, qp.UserID)
 	if err != nil {
 		return models.InfoDTO{}, err
 	}
 	info.Coins = amount
 
 	// CoinsHistory
-	balanceHistory, err := s.getBalanceHistory(ctx, userID, username)
+	balanceHistory, err := s.getBalanceHistory(ctx, qp.UserID, qp.Username)
 	if err != nil {
 		return models.InfoDTO{}, err
 	}
 	info.CoinsHistory = balanceHistory
 
 	// Inventory
-	inventory, err := s.getInventory(ctx, userID)
+	inventory, err := s.getInventory(ctx, qp.UserID)
 	if err != nil {
 		return models.InfoDTO{}, err
 	}
@@ -123,8 +123,8 @@ func (s *service) getInventory(ctx context.Context, userID int64) (models.Invent
 }
 
 // BuyItem
-func (s *service) BuyItem(ctx context.Context, userID int64, username, item string) error {
-	merch, err := s.repo.GetMerchByName(ctx, item)
+func (s *service) BuyItem(ctx context.Context, qp models.ItemQuery) error {
+	merch, err := s.repo.GetMerchByName(ctx, qp.Item)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (s *service) BuyItem(ctx context.Context, userID int64, username, item stri
 		return errors.New(internalErrors.ErrItemDoesntExist)
 	}
 
-	balance, err := s.repo.GetBalanceByUserID(ctx, userID)
+	balance, err := s.repo.GetBalanceByUserID(ctx, qp.UserID)
 	if err != nil {
 		return err
 	}
@@ -140,12 +140,12 @@ func (s *service) BuyItem(ctx context.Context, userID int64, username, item stri
 		return errors.New(internalErrors.ErrNotEnoughCoins)
 	}
 
-	inventoryID, err := s.repo.GetInventoryIDByUserID(ctx, userID)
+	inventoryID, err := s.repo.GetInventoryIDByUserID(ctx, qp.UserID)
 	if err != nil {
 		return err
 	}
 
-	err = s.repo.BuyItemTX(ctx, userID, balance.ID, inventoryID, merch.ID, merch.Price, username, merch.Name)
+	err = s.repo.BuyItemTX(ctx, qp.UserID, balance.ID, inventoryID, merch.ID, merch.Price, qp.Username, merch.Name)
 	if err != nil {
 		return err
 	}
@@ -154,26 +154,26 @@ func (s *service) BuyItem(ctx context.Context, userID int64, username, item stri
 }
 
 // Send coins
-func (s *service) SendCoins(ctx context.Context, userID, amount int64, sender, recipient string) error {
-	validRecipient, err := s.repo.IsUserExist(ctx, recipient)
+func (s *service) SendCoins(ctx context.Context, qp models.CoinsQuery) error {
+	validRecipient, err := s.repo.IsUserExist(ctx, qp.Recipient)
 	if err != nil {
 		return err
 	}
 	if !validRecipient {
 		return errors.New(internalErrors.ErrInvalidRecipient)
 	}
-	senderBalance, err := s.repo.GetBalanceByUserID(ctx, userID)
+	senderBalance, err := s.repo.GetBalanceByUserID(ctx, qp.UserID)
 	if err != nil {
 		return err
 	}
-	if senderBalance.Amount-amount < 0 {
+	if senderBalance.Amount-qp.Amount < 0 {
 		return errors.New(internalErrors.ErrNotEnoughCoins)
 	}
-	recipientBalanceID, err := s.repo.GetBalanceIDByUsername(ctx, recipient)
+	recipientBalanceID, err := s.repo.GetBalanceIDByUsername(ctx, qp.Recipient)
 	if err != nil {
 		return err
 	}
-	err = s.repo.SendCoinsTX(ctx, userID, senderBalance.ID, recipientBalanceID, amount, sender, recipient)
+	err = s.repo.SendCoinsTX(ctx, qp.UserID, senderBalance.ID, recipientBalanceID, qp.Amount, qp.Sender, qp.Recipient)
 	if err != nil {
 		return err
 	}

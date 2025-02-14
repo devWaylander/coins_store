@@ -14,6 +14,16 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type AuthReqBody struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type AuthQuery struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
 type AuthDTO struct {
 	Token string `json:"token"`
 }

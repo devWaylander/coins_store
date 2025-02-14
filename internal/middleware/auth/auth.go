@@ -77,34 +77,34 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (m *middleware) LoginWithPass(ctx context.Context, username, password string) (models.AuthDTO, error) {
-	user, err := m.repo.GetUserByUsername(ctx, username)
+func (m *middleware) LoginWithPass(ctx context.Context, qp models.AuthQuery) (models.AuthDTO, error) {
+	user, err := m.repo.GetUserByUsername(ctx, qp.Username)
 	if err != nil {
 		return models.AuthDTO{}, err
 	}
 
 	// Не зарегистрирован
 	if user.ID == 0 {
-		validPass := m.validatePassword(password)
+		validPass := m.validatePassword(qp.Password)
 		if !validPass {
 			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPasswordFormat)
 		}
 
-		validUsername := m.validateUsername(username)
+		validUsername := m.validateUsername(qp.Username)
 		if !validUsername {
 			return models.AuthDTO{}, errors.New(internalErrors.ErrWrongUsernameFormat)
 		}
 
-		passHash, err := m.passwordHash(password)
+		passHash, err := m.passwordHash(qp.Password)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
-		userID, err := m.repo.CreateUserTX(ctx, username, passHash)
+		userID, err := m.repo.CreateUserTX(ctx, qp.Username, passHash)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
 
-		token, err := m.generateJWT(userID, username)
+		token, err := m.generateJWT(userID, qp.Username)
 		if err != nil {
 			return models.AuthDTO{}, err
 		}
@@ -112,15 +112,15 @@ func (m *middleware) LoginWithPass(ctx context.Context, username, password strin
 		return models.AuthDTO{Token: token}, err
 	}
 
-	passHash, err := m.repo.GetUserPassHashByUsername(ctx, username)
+	passHash, err := m.repo.GetUserPassHashByUsername(ctx, qp.Username)
 	if err != nil {
 		return models.AuthDTO{}, err
 	}
-	err = m.passwordCompare(password, passHash)
+	err = m.passwordCompare(qp.Password, passHash)
 	if err != nil {
 		return models.AuthDTO{}, errors.New(internalErrors.ErrWrongPassword)
 	}
-	token, err := m.generateJWT(user.ID, username)
+	token, err := m.generateJWT(user.ID, qp.Username)
 	if err != nil {
 		return models.AuthDTO{}, err
 	}
