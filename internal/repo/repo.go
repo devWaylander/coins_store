@@ -200,10 +200,14 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 		UPDATE
 			shop."balance"
 		SET
-			amount = amount - $1
+			amount = CASE
+				WHEN amount - $1 >= 0 THEN amount - $1
+				ELSE amount
+			END
 		WHERE
 			id = $2
 	`
+
 	cmdTag, err := tx.Exec(ctx, query, amount, senderBalanceID)
 	if err != nil {
 		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
@@ -353,7 +357,10 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 		UPDATE
 			shop."balance"
 		SET
-			amount = amount - $1
+			amount = CASE
+				WHEN amount - $1 >= 0 THEN amount - $1
+				ELSE amount
+			END
 		WHERE
 			id = $2
 	`
