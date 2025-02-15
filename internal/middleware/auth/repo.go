@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/devWaylander/coins_store/pkg/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,13 @@ type repository struct {
 
 func NewAuthRepo(db *pgxpool.Pool) *repository {
 	return &repository{db: db}
+}
+
+func (r *repository) txRollback(ctx context.Context, tx pgx.Tx, err error) {
+	if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+		err = fmt.Errorf("failed to rollback transaction: %w", err)
+		log.Logger.Err(rollbackErr).Msg(err.Error())
+	}
 }
 
 func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash string) (int64, error) {
@@ -61,7 +69,9 @@ func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash st
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("failed to commit transaction CreateUserTX: %w", err)
+		err = fmt.Errorf("failed to commit transaction CreateUserTX: %w", err)
+		r.txRollback(ctx, tx, err)
+		return 0, err
 	}
 
 	return userID, nil
@@ -118,9 +128,6 @@ func (r *repository) GetUserPassHashByUsername(ctx context.Context, username str
 	row := r.db.QueryRow(ctx, query, username)
 	err := row.Scan(&passHash)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", nil
-		}
 		return "", fmt.Errorf("GetUserPassHashByUsername failed: %w", err)
 	}
 

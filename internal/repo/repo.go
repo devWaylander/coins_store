@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/devWaylander/coins_store/pkg/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,6 +19,13 @@ type repository struct {
 
 func New(db *pgxpool.Pool) *repository {
 	return &repository{db: db}
+}
+
+func (r *repository) txRollback(ctx context.Context, tx pgx.Tx, err error) {
+	if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+		err = fmt.Errorf("failed to rollback transaction: %w", err)
+		log.Logger.Err(rollbackErr).Msg(err.Error())
+	}
 }
 
 // User
@@ -59,9 +67,6 @@ func (r *repository) GetBalanceIDByUsername(ctx context.Context, username string
 	row := r.db.QueryRow(ctx, query, username)
 	err := row.Scan(&balanceID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil
-		}
 		return 0, fmt.Errorf("GetBalanceIDByUsername failed: %w", err)
 	}
 
@@ -96,9 +101,6 @@ func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (mode
 		&balanceDB.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Balance{}, nil
-		}
 		return models.Balance{}, fmt.Errorf("GetBalanceByUserID failed: %w", err)
 	}
 
@@ -124,9 +126,6 @@ func (r *repository) GetBalanceAmountByUserID(ctx context.Context, userID int64)
 	row := r.db.QueryRow(ctx, query, userID)
 	err := row.Scan(&amount)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil
-		}
 		return 0, fmt.Errorf("GetBalanceAmountByUserID failed: %w", err)
 	}
 
@@ -195,11 +194,6 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
-	}()
 
 	// списание баланса отправителя
 	query := `
@@ -264,7 +258,9 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction SendCoinsTX: %w", err)
+		err = fmt.Errorf("failed to commit transaction SendCoinsTX: %w", err)
+		r.txRollback(ctx, tx, err)
+		return err
 	}
 
 	return nil
@@ -351,11 +347,6 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
-	}()
 
 	// списание баланса
 	query := `
@@ -407,7 +398,9 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction BuyItemTX: %w", err)
+		err := fmt.Errorf("failed to commit transaction BuyItemTX: %w", err)
+		r.txRollback(ctx, tx, err)
+		return err
 	}
 
 	return nil
@@ -439,9 +432,6 @@ func (r *repository) GetMerchByName(ctx context.Context, name string) (models.Me
 		&merchDB.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Merch{}, nil
-		}
 		return models.Merch{}, fmt.Errorf("GetMerchByName failed: %w", err)
 	}
 

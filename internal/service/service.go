@@ -162,6 +162,7 @@ func (s *service) SendCoins(ctx context.Context, qp models.CoinsQuery) error {
 	if !validRecipient {
 		return errors.New(internalErrors.ErrInvalidRecipient)
 	}
+
 	senderBalance, err := s.repo.GetBalanceByUserID(ctx, qp.UserID)
 	if err != nil {
 		return err
@@ -173,6 +174,7 @@ func (s *service) SendCoins(ctx context.Context, qp models.CoinsQuery) error {
 	if err != nil {
 		return err
 	}
+
 	err = s.repo.SendCoinsTX(ctx, qp.UserID, senderBalance.ID, recipientBalanceID, qp.Amount, qp.Sender, qp.Recipient)
 	if err != nil {
 		return err
