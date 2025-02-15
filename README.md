@@ -131,3 +131,17 @@ go test -timeout 30s -run ^TestE2eIntegrationTestSuite$ github.com/devWaylander/
 - Должен быть не менее 8 символов.
 
 Пример: `Test123@`
+
+## Секция вопросов
+
+### Нагрузочное тестирование
+
+- **Репозиторий с нагрузочным тестированием:**  
+  [https://github.com/devWaylander/coins_store_load_testing](https://github.com/devWaylander/coins_store_load_testing)
+
+- **Результаты нагрузочного тестирования:**  
+  [Отчет о тестировании в формате HTML](https://github.com/devWaylander/coins_store_load_testing/blob/main/report.html)
+
+**Примечание:**  
+Я не до конца уверен в том, что библиотека Locust правильно агрегирует данные, но это был самый быстрый способ провести нагрузочное тестирование. Поэтому прошу воспринимать результаты скорее как примерные.
+
