@@ -26,6 +26,7 @@ import (
 
 type E2eIntegrationTestSuite struct {
 	suite.Suite
+	dbPool *pgxpool.Pool
 }
 
 func TestE2eIntegrationTestSuite(t *testing.T) {
@@ -54,13 +55,13 @@ func (s *E2eIntegrationTestSuite) SetupSuite() {
 	if err != nil {
 		log.Logger.Fatal().Msgf("Unable to create connection pool: %v\n", err)
 	}
-	defer dbPool.Close()
 
 	if err := dbPool.Ping(ctx); err != nil {
 		log.Logger.Fatal().Msgf("Database connection failed: %v", err)
 	}
 
 	log.Logger.Info().Msg("Database connection established successfully")
+	s.dbPool = dbPool
 
 	// Repositories
 	usecaseRepo := repo.New(dbPool)
@@ -84,31 +85,15 @@ func (s *E2eIntegrationTestSuite) SetupSuite() {
 		Handler: wrappedLoggerMux,
 	}
 
-	httpServer.ListenAndServe()
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Logger.Fatal().Msgf("HTTP server error: %v", err)
+		}
+	}()
 }
 
 func (s *E2eIntegrationTestSuite) TearDownSuite() {
 	ctx := context.Background()
-
-	cfg, err := config.Parse()
-	if err != nil {
-		log.Logger.Fatal().Msg(err.Error())
-	}
-
-	dbConfig, err := pgxpool.ParseConfig(cfg.DB.DBTestUrl)
-	if err != nil {
-		log.Logger.Fatal().Msgf("Unable to parse database URL: %v\n", err)
-	}
-
-	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
-	if err != nil {
-		log.Logger.Fatal().Msgf("Unable to create connection pool: %v\n", err)
-	}
-	defer dbPool.Close()
-
-	if err := dbPool.Ping(ctx); err != nil {
-		log.Logger.Fatal().Msgf("Database connection failed: %v", err)
-	}
 
 	tablesToClear := []string{
 		"shop.balance",
@@ -119,13 +104,14 @@ func (s *E2eIntegrationTestSuite) TearDownSuite() {
 	}
 
 	for _, table := range tablesToClear {
-		_, err := dbPool.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table))
+		_, err := s.dbPool.Exec(ctx, fmt.Sprintf(`TRUNCATE TABLE %s RESTART IDENTITY CASCADE;`, table))
 		if err != nil {
 			log.Logger.Fatal().Msgf("Failed to truncate table %s: %v\n", table, err)
 		}
 	}
 
-	log.Logger.Info().Msg("Database cleared successfully (except for merch table).")
+	log.Logger.Info().Msg("Database cleared successfully")
+	s.dbPool.Close()
 }
 
 func (s *E2eIntegrationTestSuite) TestAuth() {
@@ -340,3 +326,292 @@ func (s *E2eIntegrationTestSuite) TestBuyMerch() {
 		}
 	})
 }
+
+func (s *E2eIntegrationTestSuite) TestSendCoins() {
+	t := s.T()
+	client := HttpClient{}
+
+	t.Run("success_send_coins", func(t *testing.T) {
+		// create 1 user
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user2",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU1 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU1)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU1.Token), 0)
+
+		// create 2 user
+		reqBody, err = json.Marshal(models.AuthReqBody{
+			Username: "user3",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err = client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU2 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU2)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU2.Token), 0)
+
+		// send coins from user 1 to user 2
+		reqBody, err = json.Marshal(models.SendCoinsReqBody{
+			Recipient: "user3",
+			Amount:    69,
+		})
+		require.NoError(t, err)
+		resp, _, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodPost, BaseURL+"/api/sendCoin", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// user1 info
+		resp, respBody, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{
+			Coins: 931,
+			CoinsHistory: models.BalanceHistoryDTO{
+				Received: []models.ReceivedDTO{},
+				Sent:     []models.SentDTO{{ToUser: "user3", Amount: 69}},
+			},
+		}
+		require.Equal(t, expectedInfoData.Coins, respInfoData.Coins)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Sent, respInfoData.CoinsHistory.Sent)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Received, respInfoData.CoinsHistory.Received)
+
+		// user2 info
+		resp, respBody, err = client.SendJsonReq(respAuthDataU2.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData = models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData = models.InfoDTO{
+			Coins: 1069,
+			CoinsHistory: models.BalanceHistoryDTO{
+				Received: []models.ReceivedDTO{{FromUser: "user2", Amount: 69}},
+				Sent:     []models.SentDTO{},
+			},
+		}
+		require.Equal(t, expectedInfoData.Coins, respInfoData.Coins)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Sent, respInfoData.CoinsHistory.Sent)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Received, respInfoData.CoinsHistory.Received)
+	})
+	t.Run("fail_send_yourself_coins", func(t *testing.T) {
+		// login 1 user
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user2",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU1 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU1)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU1.Token), 0)
+
+		// send coins from user 1 to user 2
+		reqBody, err = json.Marshal(models.SendCoinsReqBody{
+			Recipient: "user2",
+			Amount:    100,
+		})
+		require.NoError(t, err)
+		resp, respBody, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodPost, BaseURL+"/api/sendCoin", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, internalErrors.ErrInvalidRecipientYourself, strings.TrimSpace(string(respBody)))
+	})
+	t.Run("fail_send_doesn't_exist_user_coins", func(t *testing.T) {
+		// login 1 user
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user2",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU1 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU1)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU1.Token), 0)
+
+		// send coins from user 1 to user 2
+		reqBody, err = json.Marshal(models.SendCoinsReqBody{
+			Recipient: "user5468974984",
+			Amount:    100,
+		})
+		require.NoError(t, err)
+		resp, respBody, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodPost, BaseURL+"/api/sendCoin", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, internalErrors.ErrInvalidRecipient, strings.TrimSpace(string(respBody)))
+	})
+	t.Run("success_second_send_coins", func(t *testing.T) {
+		// login 1 user
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user2",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU1 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU1)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU1.Token), 0)
+
+		// login 2 user
+		reqBody, err = json.Marshal(models.AuthReqBody{
+			Username: "user3",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err = client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU2 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU2)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU2.Token), 0)
+
+		// send coins from user 1 to user 2
+		reqBody, err = json.Marshal(models.SendCoinsReqBody{
+			Recipient: "user3",
+			Amount:    931,
+		})
+		require.NoError(t, err)
+		resp, _, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodPost, BaseURL+"/api/sendCoin", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// user1 info
+		resp, respBody, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{
+			Coins: 0,
+			CoinsHistory: models.BalanceHistoryDTO{
+				Received: []models.ReceivedDTO{},
+				Sent:     []models.SentDTO{{ToUser: "user3", Amount: 69}, {ToUser: "user3", Amount: 931}},
+			},
+		}
+		require.Equal(t, expectedInfoData.Coins, respInfoData.Coins)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Sent, respInfoData.CoinsHistory.Sent)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Received, respInfoData.CoinsHistory.Received)
+
+		// user2 info
+		resp, respBody, err = client.SendJsonReq(respAuthDataU2.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData = models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData = models.InfoDTO{
+			Coins: 2000,
+			CoinsHistory: models.BalanceHistoryDTO{
+				Received: []models.ReceivedDTO{{FromUser: "user2", Amount: 69}, {FromUser: "user2", Amount: 931}},
+				Sent:     []models.SentDTO{},
+			},
+		}
+		require.Equal(t, expectedInfoData.Coins, respInfoData.Coins)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Sent, respInfoData.CoinsHistory.Sent)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Received, respInfoData.CoinsHistory.Received)
+	})
+	t.Run("fail_third_send_coins", func(t *testing.T) {
+		// login 1 user
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user2",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU1 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU1)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU1.Token), 0)
+
+		// login 2 user
+		reqBody, err = json.Marshal(models.AuthReqBody{
+			Username: "user3",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err = client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthDataU2 := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthDataU2)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthDataU2.Token), 0)
+
+		// send coins from user 1 to user 2
+		reqBody, err = json.Marshal(models.SendCoinsReqBody{
+			Recipient: "user3",
+			Amount:    100,
+		})
+		require.NoError(t, err)
+		resp, respBody, err = client.SendJsonReq(respAuthDataU1.Token, http.MethodPost, BaseURL+"/api/sendCoin", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, internalErrors.ErrNotEnoughCoins, strings.TrimSpace(string(respBody)))
+	})
+}
+
+// func (s *E2eIntegrationTestSuite) TestGetUserInfo() {
+// 	t := s.T()
+// 	client := HttpClient{}
+
+// 	t.Run("", func(t *testing.T) {
+
+// 	})
+// }
