@@ -577,23 +577,6 @@ func (s *E2eIntegrationTestSuite) TestSendCoins() {
 
 		require.Greater(t, len(respAuthDataU1.Token), 0)
 
-		// login 2 user
-		reqBody, err = json.Marshal(models.AuthReqBody{
-			Username: "user3",
-			Password: "11111!Aa",
-		})
-		require.NoError(t, err)
-
-		resp, respBody, err = client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
-		respAuthDataU2 := models.AuthDTO{}
-		err = json.Unmarshal(respBody, &respAuthDataU2)
-		require.NoError(t, err)
-
-		require.Greater(t, len(respAuthDataU2.Token), 0)
-
 		// send coins from user 1 to user 2
 		reqBody, err = json.Marshal(models.SendCoinsReqBody{
 			Recipient: "user3",
@@ -607,11 +590,47 @@ func (s *E2eIntegrationTestSuite) TestSendCoins() {
 	})
 }
 
-// func (s *E2eIntegrationTestSuite) TestGetUserInfo() {
-// 	t := s.T()
-// 	client := HttpClient{}
+func (s *E2eIntegrationTestSuite) TestGetUserInfo() {
+	t := s.T()
+	client := HttpClient{}
 
-// 	t.Run("", func(t *testing.T) {
+	t.Run("success_user_info", func(t *testing.T) {
+		// login
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
 
-// 	})
-// }
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthData := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthData)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthData.Token), 0)
+		// get info with item
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{
+			Coins: 0,
+			CoinsHistory: models.BalanceHistoryDTO{
+				Received: []models.ReceivedDTO{},
+				Sent:     []models.SentDTO{{ToUser: "AvitoShop", Amount: 500}, {ToUser: "AvitoShop", Amount: 500}},
+			},
+			Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 2}},
+		}
+		require.Equal(t, expectedInfoData.Coins, respInfoData.Coins)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Sent, respInfoData.CoinsHistory.Sent)
+		require.ElementsMatch(t, expectedInfoData.CoinsHistory.Received, respInfoData.CoinsHistory.Received)
+		require.ElementsMatch(t, expectedInfoData.Inventory, respInfoData.Inventory)
+	})
+}
