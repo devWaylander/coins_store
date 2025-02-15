@@ -33,7 +33,6 @@ type DB struct {
 	DBMaxConnections     int32         `env:"MAX_CONNECTIONS,required"`
 	DBLocalUrl           string        `env:"DATABASE_LOCAL_URL,required"`
 	DBContainerUrl       string        `env:"DATABASE_CONTAINER_URL,required"`
-	TestDBUrl            string        `env:"TEST_DATABASE_URL,required"`
 	DBLifeTimeConnection time.Duration `json:"dbLifeTimeConnection"`
 	DBMaxConnIdleTime    time.Duration `json:"dbeMaxIdleTime"`
 	DBUrl                string        `json:"dbURL"`
