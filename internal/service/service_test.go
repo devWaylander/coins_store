@@ -25,7 +25,7 @@ func Test_service_GetUserInfo(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "success - user exists",
+			name: "success_-_user_exists",
 			fields: fields{
 				repo: &MockRepository{
 					GetBalanceAmountByUserIDFunc: func(ctx context.Context, userID int64) (int64, error) {
@@ -65,7 +65,7 @@ func Test_service_GetUserInfo(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error - repository returns GetBalanceAmountByUserIDFunc error",
+			name: "error_-_repository_returns_GetBalanceAmountByUserIDFunc_error",
 			fields: fields{
 				repo: &MockRepository{
 					GetBalanceAmountByUserIDFunc: func(ctx context.Context, userID int64) (int64, error) {
@@ -92,7 +92,7 @@ func Test_service_GetUserInfo(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - repository returns GetBalanceHistoryByUserIDFunc error",
+			name: "error_-_repository_returns_GetBalanceHistoryByUserIDFunc_error",
 			fields: fields{
 				repo: &MockRepository{
 					GetBalanceAmountByUserIDFunc: func(ctx context.Context, userID int64) (int64, error) {
@@ -116,7 +116,7 @@ func Test_service_GetUserInfo(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - repository returns GetInventoryMerchItemsFunc error",
+			name: "error_-_repository_returns_GetInventoryMerchItemsFunc_error",
 			fields: fields{
 				repo: &MockRepository{
 					GetBalanceAmountByUserIDFunc: func(ctx context.Context, userID int64) (int64, error) {
@@ -173,7 +173,7 @@ func Test_service_BuyItem(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "success - item purchased",
+			name: "success_-_item_purchased",
 			fields: fields{
 				repo: &MockRepository{
 					GetMerchByNameFunc: func(ctx context.Context, name string) (models.Merch, error) {
@@ -197,11 +197,11 @@ func Test_service_BuyItem(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error - item doesn't exist",
+			name: "error_-_item_doesn't_exist",
 			fields: fields{
 				repo: &MockRepository{
 					GetMerchByNameFunc: func(ctx context.Context, name string) (models.Merch, error) {
-						return models.Merch{}, nil
+						return models.Merch{}, errors.New("fail")
 					},
 				},
 			},
@@ -212,7 +212,7 @@ func Test_service_BuyItem(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - not enough coins",
+			name: "error_-_not_enough_coins",
 			fields: fields{
 				repo: &MockRepository{
 					GetMerchByNameFunc: func(ctx context.Context, name string) (models.Merch, error) {
@@ -230,7 +230,7 @@ func Test_service_BuyItem(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - database error on balance retrieval",
+			name: "error_-_database_error_on_balance_retrieval",
 			fields: fields{
 				repo: &MockRepository{
 					GetMerchByNameFunc: func(ctx context.Context, name string) (models.Merch, error) {
@@ -275,7 +275,7 @@ func Test_service_SendCoins(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "success - send coins",
+			name: "success_-_send_coins",
 			fields: fields{
 				repo: &MockRepository{
 					IsUserExistFunc: func(ctx context.Context, username string) (bool, error) {
@@ -299,7 +299,7 @@ func Test_service_SendCoins(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "error - recipient does not exist",
+			name: "error_-_recipient_does_not_exist",
 			fields: fields{
 				repo: &MockRepository{
 					IsUserExistFunc: func(ctx context.Context, username string) (bool, error) {
@@ -314,7 +314,7 @@ func Test_service_SendCoins(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - not enough coins",
+			name: "error_-_not_enough_coins",
 			fields: fields{
 				repo: &MockRepository{
 					IsUserExistFunc: func(ctx context.Context, username string) (bool, error) {
@@ -332,7 +332,7 @@ func Test_service_SendCoins(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "error - repository failure",
+			name: "error_-_repository_failure",
 			fields: fields{
 				repo: &MockRepository{
 					IsUserExistFunc: func(ctx context.Context, username string) (bool, error) {

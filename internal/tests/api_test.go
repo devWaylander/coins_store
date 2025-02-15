@@ -204,10 +204,7 @@ func (s *E2eIntegrationTestSuite) TestBuyMerch() {
 		require.NoError(t, err)
 
 		expectedInfoData := models.InfoDTO{Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 1}}}
-		for _, item := range respInfoData.Inventory {
-			require.Equal(t, expectedInfoData.Inventory[0].Type, item.Type)
-			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
-		}
+		require.ElementsMatch(t, expectedInfoData.Inventory, respInfoData.Inventory)
 	})
 	t.Run("success_buy_second_merch", func(t *testing.T) {
 		// login
@@ -434,7 +431,7 @@ func (s *E2eIntegrationTestSuite) TestSendCoins() {
 
 		require.Greater(t, len(respAuthDataU1.Token), 0)
 
-		// send coins from user 1 to user 2
+		// send coins from user 1 to yourself
 		reqBody, err = json.Marshal(models.SendCoinsReqBody{
 			Recipient: "user2",
 			Amount:    100,
@@ -463,7 +460,7 @@ func (s *E2eIntegrationTestSuite) TestSendCoins() {
 
 		require.Greater(t, len(respAuthDataU1.Token), 0)
 
-		// send coins from user 1 to user 2
+		// send coins from user 1 to doesn't exist user
 		reqBody, err = json.Marshal(models.SendCoinsReqBody{
 			Recipient: "user5468974984",
 			Amount:    100,
@@ -611,7 +608,8 @@ func (s *E2eIntegrationTestSuite) TestGetUserInfo() {
 		require.NoError(t, err)
 
 		require.Greater(t, len(respAuthData.Token), 0)
-		// get info with item
+
+		// user info
 		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)

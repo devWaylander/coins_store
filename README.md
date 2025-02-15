@@ -21,13 +21,38 @@ make help
 
 2. Ознакомьтесь с инструментом **dbmate** для работы с миграциями.
 
-## Тестирование покрытия
-
+## Тестирование 
 Для проверки покрытия unit тестами слоя **use-case** выполните команду:
 
 ```bash
 go test -cover ./internal/service
 ```
+
+Для запуска тестов необходимо запустить контейнер с тестовой БД и миграциями
+
+```bash
+docker compose up postgresdbtest migrationstest
+```
+
+Для запуска unit тестов auth выполните команду:
+
+```bash
+go test -timeout 30s -run ^Test_middleware_LoginWithPass$ github.com/devWaylander/coins_store/internal/middleware/auth -count=1 -v
+```
+
+Для запуска unit тестов usecase выполните команду:
+
+```bash
+go test -timeout 30s -run ^Test_middleware_LoginWithPass$ github.com/devWaylander/coins_store/internal/middleware/auth -count=1 -v
+```
+
+Для запуска e2e тестов API выполните команду:
+
+```bash
+go test -timeout 30s -run ^TestE2eIntegrationTestSuite$ github.com/devWaylander/coins_store/internal/tests -count=1 -v
+```
+
+Либо воспользуйтесь встроенным плагином `Testing` для VSCode, в таком случае можно будет просмотреть дерево тестов и запустить их
 
 ## Настройка и запуск проекта
 
