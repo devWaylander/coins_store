@@ -92,8 +92,8 @@ func (r *repository) GetBalanceByUserID(ctx context.Context, userID int64) (mode
 	err := row.Scan(
 		&balanceDB.ID,
 		&balanceDB.Amount,
-		&balanceDB.CreatedAt,
 		&balanceDB.DeletedAt,
+		&balanceDB.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -435,8 +435,8 @@ func (r *repository) GetMerchByName(ctx context.Context, name string) (models.Me
 		&merchDB.ID,
 		&merchDB.Name,
 		&merchDB.Price,
-		&merchDB.CreatedAt,
 		&merchDB.DeletedAt,
+		&merchDB.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

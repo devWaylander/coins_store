@@ -1,7 +1,6 @@
-FROM alpine:latest
+FROM alpine:3.21.0
 
 WORKDIR /usr/src/migrator
-COPY ./db/migrations /usr/src/migrator/db/migrations
 
 # Dependencies
 RUN apk add --no-cache curl
@@ -16,3 +15,5 @@ RUN curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/relea
 RUN chmod +x /usr/local/bin/dbmate
 RUN ls -l /usr/local/bin/dbmate
 RUN rm -rf /var/lib/apt/lists/*
+
+COPY ./db/migrations /usr/src/migrator/db/migrations

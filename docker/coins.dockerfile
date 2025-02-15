@@ -10,7 +10,7 @@ COPY . .
 
 RUN CGO_ENABLED=0 go build -o /usr/src/app/coins ./cmd
 
-FROM alpine:latest
+FROM alpine:3.21.0
 
 COPY --from=builder /usr/src/app/coins /coins
 

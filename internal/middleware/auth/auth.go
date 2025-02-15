@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 	"unicode"
 
@@ -45,7 +46,8 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 		}
 
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
+		ok := strings.Contains(authHeader, "Bearer ")
+		if authHeader == "" || !ok {
 			http.Error(w, internalErrors.ErrAuthHeader, http.StatusUnauthorized)
 			return
 		}
@@ -56,7 +58,7 @@ func (m *middleware) Middleware(next http.Handler) http.Handler {
 		})
 		if err != nil {
 			log.Logger.Err(err).Msg(err.Error())
-			http.Error(w, internalErrors.ErrLogin, http.StatusInternalServerError)
+			http.Error(w, internalErrors.ErrLogin, http.StatusUnauthorized)
 			return
 		}
 		if !token.Valid {
@@ -125,7 +127,7 @@ func (m *middleware) LoginWithPass(ctx context.Context, qp models.AuthQuery) (mo
 		return models.AuthDTO{}, err
 	}
 
-	return models.AuthDTO{Token: token}, err
+	return models.AuthDTO{Token: token}, nil
 }
 
 func (m *middleware) generateJWT(userID int64, username string) (string, error) {

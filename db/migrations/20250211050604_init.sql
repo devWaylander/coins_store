@@ -67,8 +67,6 @@ CREATE TABLE shop."inventory" (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX "inventory@user_id_idx" ON shop."inventory" (user_id);
-
 -- inventory_merch
 CREATE TABLE shop."inventory_merch" (
     PRIMARY KEY (inventory_id, merch_id),

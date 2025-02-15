@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/caarlos0/env/v10"
 	"github.com/devWaylander/coins_store/pkg/log"
@@ -10,8 +11,7 @@ import (
 )
 
 var (
-	C           Config
-	isContainer bool = true
+	C Config
 )
 
 type Config struct {
@@ -25,27 +25,28 @@ type Common struct {
 }
 
 type DB struct {
-	DBHost           string `env:"HOST,required"`
-	DBUser           string `env:"USER,required"`
-	DBPassword       string `env:"PASSWORD,required"`
-	DBName           string `env:"NAME,required"`
-	DBPort           string `env:"PORT,required"`
-	DBMaxConnections int32  `env:"MAX_CONNECTIONS,required"`
-	DBUrl            string `json:"databaseURL"`
-	DBLocalUrl       string `env:"DATABASE_LOCAL_URL,required"`
-	DBContainerUrl   string `env:"DATABASE_CONTAINER_URL,required"`
-	TestDBUrl        string `env:"TEST_DATABASE_URL,required"`
+	DBHost               string        `env:"HOST,required"`
+	DBUser               string        `env:"USER,required"`
+	DBPassword           string        `env:"PASSWORD,required"`
+	DBName               string        `env:"NAME,required"`
+	DBPort               string        `env:"PORT,required"`
+	DBMaxConnections     int32         `env:"MAX_CONNECTIONS,required"`
+	DBLocalUrl           string        `env:"DATABASE_LOCAL_URL,required"`
+	DBContainerUrl       string        `env:"DATABASE_CONTAINER_URL,required"`
+	TestDBUrl            string        `env:"TEST_DATABASE_URL,required"`
+	DBLifeTimeConnection time.Duration `json:"dbLifeTimeConnection"`
+	DBMaxConnIdleTime    time.Duration `json:"dbeMaxIdleTime"`
+	DBUrl                string        `json:"dbURL"`
 }
 
 func Parse() (Config, error) {
-	// If running from container, use docker envs
-	if _, exists := os.LookupEnv("COMMON_API_PORT"); !exists {
-		// If running on local machine use env file
+	isContainer := isRunningInContainer()
+
+	if !isContainer {
 		err := godotenv.Load("../.env")
 		if err != nil {
 			return C, fmt.Errorf("failed to read environment variables: %w", err)
 		}
-		isContainer = false
 	}
 
 	// Decode envs into config structures
@@ -65,5 +66,16 @@ func Parse() (Config, error) {
 		C.DB.DBUrl = C.DB.DBContainerUrl
 	}
 
+	C.DB.DBLifeTimeConnection = 1 * time.Minute
+	C.DB.DBMaxConnIdleTime = 1 * time.Minute
+
 	return C, nil
+}
+
+func isRunningInContainer() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+
+	return false
 }

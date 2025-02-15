@@ -2,7 +2,6 @@ package models
 
 import "github.com/golang-jwt/jwt/v5"
 
-// JWT
 type contextKey string
 
 const UserIDKey contextKey = "userID"

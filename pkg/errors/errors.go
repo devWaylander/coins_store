@@ -4,6 +4,7 @@ const (
 	// ===================-  COMMON  -===================
 	ErrUnmarshalResponse = "ERR_FAILED_TO_DECODE_REQ"
 	ErrMarshalResponse   = "ERR_FAILED_TO_ENCODE_JSON_RESP"
+	ErrDecodeCtx         = "ERR_FAILED_TO_DECODE_CONTEXT_CLAIMS"
 	// ===================-  AUTH  -===================
 	ErrInvalidAuthReqParams = "ERR_INVALID_AUTH_REQ_PARAMS"
 	ErrWrongPassword        = "ERR_WRONG_PASSWORD"

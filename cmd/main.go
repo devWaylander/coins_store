@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/devWaylander/coins_store/config"
 	"github.com/devWaylander/coins_store/internal/handler"
@@ -45,14 +44,20 @@ func main() {
 	}
 
 	dbConfig.MaxConns = cfg.DB.DBMaxConnections
-	dbConfig.MaxConnLifetime = 1 * time.Minute
-	dbConfig.MaxConnIdleTime = 1 * time.Minute
+	dbConfig.MaxConnLifetime = cfg.DB.DBLifeTimeConnection
+	dbConfig.MaxConnIdleTime = cfg.DB.DBMaxConnIdleTime
 
-	dbPool, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
+	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 	if err != nil {
 		log.Logger.Fatal().Msgf("Unable to create connection pool: %v\n", err)
 	}
 	defer dbPool.Close()
+
+	if err := dbPool.Ping(ctx); err != nil {
+		log.Logger.Fatal().Msgf("Database connection failed: %v", err)
+	}
+
+	log.Logger.Info().Msg("Database connection established successfully")
 
 	// Repositories
 	usecaseRepo := repo.New(dbPool)

@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
-	"strings"
 
 	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/log"
@@ -29,6 +29,7 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	// unsecured handles
 	// Аутентификация и получение JWT-токена. При первой аутентификации пользователь создается автоматически.
 	mux.HandleFunc("POST /api/auth", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		body := models.AuthReqBody{}
 
 		err := json.NewDecoder(r.Body).Decode(&body)
@@ -62,11 +63,16 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	// secured handles
 	// Получить информацию о монетах, инвентаре и истории транзакций.
 	mux.HandleFunc("GET /api/info", func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Context().Value(models.UserIDKey).(int64)
-		username := r.Context().Value(models.UsernameKey).(string)
+		ctx := r.Context()
+
+		claims, err := decodeCtxClaims(ctx)
+		if err != nil {
+			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
+		}
+
 		infoDTO, err := service.GetUserInfo(ctx, models.InfoQuery{
-			UserID:   userID,
-			Username: username,
+			UserID:   claims.UserID,
+			Username: claims.Username,
 		})
 		if err != nil {
 			log.Logger.Err(err).Msg(err.Error())
@@ -78,22 +84,22 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	})
 	// Купить предмет за монеты.
 	mux.HandleFunc("GET /api/buy/", func(w http.ResponseWriter, r *http.Request) {
-		urlParts := strings.Split(r.URL.Path, "/")
-		if len(urlParts) < 4 {
+		ctx := r.Context()
+
+		item := r.URL.Path[len("/api/buy/"):]
+		if item == "" {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		item := urlParts[3]
-		if item == "" {
-			http.Error(w, internalErrors.ErrInvalidGetBuyItemReqParams, http.StatusBadRequest)
-			return
+
+		claims, err := decodeCtxClaims(ctx)
+		if err != nil {
+			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
 		}
 
-		userID := r.Context().Value(models.UserIDKey).(int64)
-		username := r.Context().Value(models.UsernameKey).(string)
-		err := service.BuyItem(ctx, models.ItemQuery{
-			UserID:   userID,
-			Username: username,
+		err = service.BuyItem(ctx, models.ItemQuery{
+			UserID:   claims.UserID,
+			Username: claims.Username,
 			Item:     item,
 		})
 		if err != nil {
@@ -113,6 +119,7 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 	})
 	// Отправить монеты другому пользователю
 	mux.HandleFunc("POST /api/sendCoin", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		body := models.SendCoinsReqBody{}
 
 		err := json.NewDecoder(r.Body).Decode(&body)
@@ -126,16 +133,19 @@ func New(ctx context.Context, mux *http.ServeMux, authMiddleware AuthMiddleware,
 			return
 		}
 
-		username := r.Context().Value(models.UsernameKey).(string)
-		if body.Recipient == username {
+		claims, err := decodeCtxClaims(ctx)
+		if err != nil {
+			http.Error(w, internalErrors.ErrGetInfo, http.StatusInternalServerError)
+		}
+		if body.Recipient == claims.Username {
 			http.Error(w, internalErrors.ErrInvalidRecipientYourself, http.StatusBadRequest)
 			return
 		}
-		userID := r.Context().Value(models.UserIDKey).(int64)
+
 		err = service.SendCoins(ctx, models.CoinsQuery{
-			UserID:    userID,
+			UserID:    claims.UserID,
 			Amount:    body.Amount,
-			Sender:    username,
+			Sender:    claims.Username,
 			Recipient: body.Recipient,
 		})
 		if err != nil {
@@ -170,4 +180,21 @@ func sendResponse(w http.ResponseWriter, data any) {
 		http.Error(w, internalErrors.ErrMarshalResponse, http.StatusInternalServerError)
 		return
 	}
+}
+
+func decodeCtxClaims(ctx context.Context) (models.Claims, error) {
+	err := errors.New(internalErrors.ErrDecodeCtx)
+
+	userID, ok := ctx.Value(models.UserIDKey).(int64)
+	if !ok {
+		log.Logger.Err(err).Msg(err.Error())
+		return models.Claims{}, err
+	}
+	username, ok := ctx.Value(models.UsernameKey).(string)
+	if !ok {
+		log.Logger.Err(err).Msg(err.Error())
+		return models.Claims{}, err
+	}
+
+	return models.Claims{UserID: userID, Username: username}, nil
 }
