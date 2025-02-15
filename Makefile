@@ -16,16 +16,20 @@ installDeps: 										# Install necessary dependencies
 	sudo chmod +x /usr/local/bin/dbmate \
 	/usr/local/bin/dbmate --help
 
-.PHONY: dropDB
-dropDB: 										# Drop database
-	dbmate -u $(DATABASE_URL) drop
-
 .PHONY: dropTestDB
 dropTestDB: 										# Drop test database
 	dbmate -u $(TEST_DATABASE_URL) drop
 
+.PHONY: migrateTestDB
+migrateTestDB: dropTestDB 							# Create database and run migrations
+	dbmate -u $(TEST_DATABASE_URL) --no-dump-schema up
+
+.PHONY: dropDB
+dropDB: 										# Drop database
+	dbmate -u $(DATABASE_URL) drop
+
 .PHONY: migrateDB
-migrateTestDB: dropDB 							# Create database and run migrations
+migrateDB: dropDB 							# Create database and run migrations
 	dbmate -u $(DATABASE_URL) --no-dump-schema up
 
 .PHONY: stopSwaggerui

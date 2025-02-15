@@ -86,13 +86,51 @@ func (s *E2eIntegrationTestSuite) SetupSuite() {
 }
 
 func (s *E2eIntegrationTestSuite) TearDownSuite() {
+	ctx := context.Background()
+
+	cfg, err := config.Parse()
+	if err != nil {
+		log.Logger.Fatal().Msg(err.Error())
+	}
+
+	dbConfig, err := pgxpool.ParseConfig(cfg.DB.DBTestUrl)
+	if err != nil {
+		log.Logger.Fatal().Msgf("Unable to parse database URL: %v\n", err)
+	}
+
+	dbPool, err := pgxpool.NewWithConfig(ctx, dbConfig)
+	if err != nil {
+		log.Logger.Fatal().Msgf("Unable to create connection pool: %v\n", err)
+	}
+	defer dbPool.Close()
+
+	if err := dbPool.Ping(ctx); err != nil {
+		log.Logger.Fatal().Msgf("Database connection failed: %v", err)
+	}
+
+	tablesToClear := []string{
+		"shop.balance",
+		"shop.balance_history",
+		"shop.user",
+		"shop.inventory",
+		"shop.inventory_merch",
+	}
+
+	for _, table := range tablesToClear {
+		_, err := dbPool.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE;", table))
+		if err != nil {
+			log.Logger.Fatal().Msgf("Failed to truncate table %s: %v\n", table, err)
+		}
+	}
+
+	log.Logger.Info().Msg("Database cleared successfully (except for merch table).")
 }
 
 func (s *E2eIntegrationTestSuite) TestAuth() {
 	t := s.T()
 	client := HttpClient{}
 
-	t.Run("new_user_auth_success", func(t *testing.T) {
+	t.Run("success_new_user_auth", func(t *testing.T) {
 		reqBody, err := json.Marshal(models.AuthReqBody{
 			Username: "user1",
 			Password: "11111!Aa",
@@ -110,7 +148,7 @@ func (s *E2eIntegrationTestSuite) TestAuth() {
 		require.Greater(t, len(respData.Token), 0)
 	})
 
-	t.Run("exist_user_auth_success", func(t *testing.T) {
+	t.Run("success_exist_user_auth", func(t *testing.T) {
 		reqBody, err := json.Marshal(models.AuthReqBody{
 			Username: "user1",
 			Password: "11111!Aa",
@@ -126,5 +164,137 @@ func (s *E2eIntegrationTestSuite) TestAuth() {
 		require.NoError(t, err)
 
 		require.Greater(t, len(respData.Token), 0)
+	})
+
+	t.Run("fail_exist_user_auth", func(t *testing.T) {
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "1asdfjnaasf",
+		})
+		require.NoError(t, err)
+
+		resp, _, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+}
+
+func (s *E2eIntegrationTestSuite) TestBuyMerch() {
+	t := s.T()
+	client := HttpClient{}
+
+	t.Run("success_buy_merch", func(t *testing.T) {
+		// login
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthData := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthData)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthData.Token), 0)
+
+		// buy
+		resp, _, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/pink-hoody", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// get info with item
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 1}}}
+		for _, item := range respInfoData.Inventory {
+			require.Equal(t, expectedInfoData.Inventory[0].Type, item.Type)
+			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
+		}
+	})
+	t.Run("success_buy_second_merch", func(t *testing.T) {
+		// login
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthData := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthData)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthData.Token), 0)
+
+		// buy
+		resp, _, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/pink-hoody", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// get info with item
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 2}}}
+		for _, item := range respInfoData.Inventory {
+			require.Equal(t, expectedInfoData.Inventory[0].Type, item.Type)
+			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
+		}
+	})
+	t.Run("fail_buy_third_merch", func(t *testing.T) {
+		// login
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthData := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthData)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthData.Token), 0)
+
+		// buy
+		resp, _, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/pink-hoody", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		// get info with item
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 2}}}
+		for _, item := range respInfoData.Inventory {
+			require.Equal(t, expectedInfoData.Inventory[0].Type, item.Type)
+			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
+		}
 	})
 }
