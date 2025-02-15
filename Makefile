@@ -1,6 +1,7 @@
 include .env
 SERVICE = coins
 DATABASE_URL=$(DB_DATABASE_LOCAL_URL)
+TEST_DATABASE_URL=$(DB_TEST_DATABASE_URL)
 SWAGGER_UI_CONTAINER_NAME = swagger-ui
 
 default: help
@@ -16,8 +17,12 @@ installDeps: 										# Install necessary dependencies
 	/usr/local/bin/dbmate --help
 
 .PHONY: dropDB
-dropDB: 										# Drop test database
+dropDB: 										# Drop database
 	dbmate -u $(DATABASE_URL) drop
+
+.PHONY: dropTestDB
+dropTestDB: 										# Drop test database
+	dbmate -u $(TEST_DATABASE_URL) drop
 
 .PHONY: migrateDB
 migrateTestDB: dropDB 							# Create database and run migrations

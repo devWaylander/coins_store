@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/caarlos0/env/v10"
@@ -33,6 +34,7 @@ type DB struct {
 	DBMaxConnections     int32         `env:"MAX_CONNECTIONS,required"`
 	DBLocalUrl           string        `env:"DATABASE_LOCAL_URL,required"`
 	DBContainerUrl       string        `env:"DATABASE_CONTAINER_URL,required"`
+	DBTestUrl            string        `env:"TEST_DATABASE_URL,required"`
 	DBLifeTimeConnection time.Duration `json:"dbLifeTimeConnection"`
 	DBMaxConnIdleTime    time.Duration `json:"dbeMaxIdleTime"`
 	DBUrl                string        `json:"dbURL"`
@@ -42,7 +44,12 @@ func Parse() (Config, error) {
 	isContainer := isRunningInContainer()
 
 	if !isContainer {
-		err := godotenv.Load("../.env")
+		projectRoot, err := findProjectRoot()
+		if err != nil {
+			return C, fmt.Errorf("unable to find project root: %w", err)
+		}
+
+		err = godotenv.Load(filepath.Join(projectRoot, ".env"))
 		if err != nil {
 			return C, fmt.Errorf("failed to read environment variables: %w", err)
 		}
@@ -77,4 +84,25 @@ func isRunningInContainer() bool {
 	}
 
 	return false
+}
+
+func findProjectRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("unable to get current working directory: %w", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+
+		parentDir := filepath.Dir(dir)
+		if parentDir == dir {
+			break
+		}
+		dir = parentDir
+	}
+
+	return "", fmt.Errorf("could not find project root (no go.mod found)")
 }
