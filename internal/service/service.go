@@ -126,10 +126,11 @@ func (s *service) getInventory(ctx context.Context, userID int64) (models.Invent
 func (s *service) BuyItem(ctx context.Context, qp models.ItemQuery) error {
 	merch, err := s.repo.GetMerchByName(ctx, qp.Item)
 	if err != nil {
+		if merch.ID == 0 {
+			return errors.New(internalErrors.ErrItemDoesntExist)
+		}
+
 		return err
-	}
-	if merch.ID == 0 {
-		return errors.New(internalErrors.ErrItemDoesntExist)
 	}
 
 	balance, err := s.repo.GetBalanceByUserID(ctx, qp.UserID)

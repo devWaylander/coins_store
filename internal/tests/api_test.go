@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/devWaylander/coins_store/internal/handler"
@@ -13,6 +14,7 @@ import (
 	"github.com/devWaylander/coins_store/internal/middleware/logger"
 	"github.com/devWaylander/coins_store/internal/repo"
 	"github.com/devWaylander/coins_store/internal/service"
+	internalErrors "github.com/devWaylander/coins_store/pkg/errors"
 	"github.com/devWaylander/coins_store/pkg/log"
 	"github.com/devWaylander/coins_store/pkg/models"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -259,7 +261,7 @@ func (s *E2eIntegrationTestSuite) TestBuyMerch() {
 			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
 		}
 	})
-	t.Run("fail_buy_third_merch", func(t *testing.T) {
+	t.Run("fail_buy_third_merch_not_enough_coins", func(t *testing.T) {
 		// login
 		reqBody, err := json.Marshal(models.AuthReqBody{
 			Username: "user1",
@@ -278,9 +280,49 @@ func (s *E2eIntegrationTestSuite) TestBuyMerch() {
 		require.Greater(t, len(respAuthData.Token), 0)
 
 		// buy
-		resp, _, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/pink-hoody", []byte{})
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/pink-hoody", []byte{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, internalErrors.ErrNotEnoughCoins, strings.TrimSpace(string(respBody)))
+
+		// get info with item
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respInfoData := models.InfoDTO{}
+		err = json.Unmarshal(respBody, &respInfoData)
+		require.NoError(t, err)
+
+		expectedInfoData := models.InfoDTO{Inventory: []models.MerchDTO{{Type: "pink-hoody", Quantity: 2}}}
+		for _, item := range respInfoData.Inventory {
+			require.Equal(t, expectedInfoData.Inventory[0].Type, item.Type)
+			require.Equal(t, expectedInfoData.Inventory[0].Quantity, item.Quantity)
+		}
+	})
+	t.Run("fail_buy_third_merch_doesn't_exist", func(t *testing.T) {
+		// login
+		reqBody, err := json.Marshal(models.AuthReqBody{
+			Username: "user1",
+			Password: "11111!Aa",
+		})
+		require.NoError(t, err)
+
+		resp, respBody, err := client.SendJsonReq("", http.MethodPost, BaseURL+"/api/auth", reqBody)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respAuthData := models.AuthDTO{}
+		err = json.Unmarshal(respBody, &respAuthData)
+		require.NoError(t, err)
+
+		require.Greater(t, len(respAuthData.Token), 0)
+
+		// buy
+		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/buy/purple-hoody", []byte{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Equal(t, internalErrors.ErrItemDoesntExist, strings.TrimSpace(string(respBody)))
 
 		// get info with item
 		resp, respBody, err = client.SendJsonReq(respAuthData.Token, http.MethodGet, BaseURL+"/api/info", []byte{})
