@@ -1,0 +1,34 @@
+# .golangci.yaml
+linters:
+  enable:
+    - govet
+    - golint
+    - errcheck
+    - staticcheck
+    - gocritic
+    - gocyclo
+    - ineffassign
+    - misspell
+    - unconvert
+    - typecheck
+    - deadcode
+    - varcheck
+    - structcheck
+    - lll
+    - bodyclose
+    - gosec
+    - prealloc
+    - maligned
+    - depguard
+    - dupl
+    - lint
+    - scopelint
+    - exportloopref
+    - paralleltest
+    - testpackage
+    - interfacer
+    - noctx
+
+run:
+  tests: true
+  timeout: 5m

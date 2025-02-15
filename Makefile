@@ -1,5 +1,7 @@
+include .env
 SERVICE = coins
-DATABASE_URL=$(DATABASE_URL)
+DATABASE_URL=$(DB_DATABASE_LOCAL_URL)
+TEST_DATABASE_URL=$(DB_TEST_DATABASE_URL)
 SWAGGER_UI_CONTAINER_NAME = swagger-ui
 
 default: help
@@ -16,10 +18,18 @@ installDeps: 										# Install necessary dependencies
 
 .PHONY: dropTestDB
 dropTestDB: 										# Drop test database
-	dbmate -u $(DATABASE_URL) drop
+	dbmate -u $(TEST_DATABASE_URL) drop
 
 .PHONY: migrateTestDB
-migrateTestDB: dropTestDB 							# Create test database and run migrations
+migrateTestDB: dropTestDB 							# Create database and run migrations
+	dbmate -u $(TEST_DATABASE_URL) --no-dump-schema up
+
+.PHONY: dropDB
+dropDB: 										# Drop database
+	dbmate -u $(DATABASE_URL) drop
+
+.PHONY: migrateDB
+migrateDB: dropDB 							# Create database and run migrations
 	dbmate -u $(DATABASE_URL) --no-dump-schema up
 
 .PHONY: stopSwaggerui
