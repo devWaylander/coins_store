@@ -31,17 +31,13 @@ func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash st
 	if err != nil {
 		return 0, err
 	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
-	}()
 
 	// создание баланса
 	var balanceID int64
 	query := `INSERT INTO shop."balance" (amount) VALUES (1000) RETURNING id`
 	err = tx.QueryRow(ctx, query).Scan(&balanceID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return 0, fmt.Errorf("failed to create balance CreateUserTX: %w", err)
 	}
 
@@ -57,6 +53,7 @@ func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash st
 	`
 	err = tx.QueryRow(ctx, query, balanceID, username, passwordHash).Scan(&userID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return 0, fmt.Errorf("failed to create user CreateUserTX: %w", err)
 	}
 
@@ -65,6 +62,7 @@ func (r *repository) CreateUserTX(ctx context.Context, username, passwordHash st
 	query = `INSERT INTO shop."inventory" (user_id) VALUES ($1) RETURNING id`
 	err = tx.QueryRow(ctx, query, userID).Scan(&inventoryID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return 0, fmt.Errorf("failed to create inventory CreateUserTX: %w", err)
 	}
 
