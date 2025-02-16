@@ -210,6 +210,7 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 
 	cmdTag, err := tx.Exec(ctx, query, amount, senderBalanceID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
@@ -224,9 +225,11 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 	`
 	cmdTag, err = tx.Exec(ctx, query, senderBalanceID, amount, sender, recipient)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no rows inserted sender balance history SendCoinsTX")
 	}
 
@@ -241,9 +244,11 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 	`
 	cmdTag, err = tx.Exec(ctx, query, amount, recipientBalanceID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no recipient balance rows updated SendCoinsTX")
 	}
 	// создание записи в истории транзакций получателя
@@ -255,9 +260,11 @@ func (r *repository) SendCoinsTX(ctx context.Context, userID, senderBalanceID, r
 	`
 	cmdTag, err = tx.Exec(ctx, query, recipientBalanceID, amount, sender, recipient)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query SendCoinsTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no rows inserted recipient balance history SendCoinsTX")
 	}
 
@@ -366,9 +373,11 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	`
 	cmdTag, err := tx.Exec(ctx, query, price, balanceID)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no balance rows updated BuyItemTX")
 	}
 
@@ -381,9 +390,11 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	`
 	cmdTag, err = tx.Exec(ctx, query, balanceID, price, username, shopUser)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no rows inserted balance history BuyItemTX")
 	}
 
@@ -398,9 +409,11 @@ func (r *repository) BuyItemTX(ctx context.Context, userID, balanceID, inventory
 	`
 	cmdTag, err = tx.Exec(ctx, query, inventoryID, merchID, item)
 	if err != nil {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("failed to execute query BuyItemTX: %v", err)
 	}
 	if cmdTag.RowsAffected() == 0 {
+		r.txRollback(ctx, tx, err)
 		return fmt.Errorf("no rows inserted inventory merch BuyItemTX")
 	}
 
